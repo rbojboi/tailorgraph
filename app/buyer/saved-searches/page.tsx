@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { filterAndSortMarketplaceListings } from "@/app/page";
+import { filterAndSortMarketplaceListings } from "@/app/marketplace/page";
 import { deleteSavedSearchAction, renameSavedSearchAction } from "@/app/actions";
 import { ConfirmDeleteButton } from "@/components/confirm-delete-button";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
