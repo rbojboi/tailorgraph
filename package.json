@@ -1,0 +1,41 @@
+{
+  "name": "tailorgraph",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook",
+    "stripe:trigger:checkout": "stripe trigger checkout.session.completed",
+    "stripe:trigger:async-fail": "stripe trigger checkout.session.async_payment_failed"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "better-sqlite3": "^12.8.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.1",
+    "next": "^16.2.1",
+    "pg": "^8.20.0",
+    "postcss": "^8.5.8",
+    "prisma": "^6.16.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "resend": "^6.10.0",
+    "stripe": "^20.4.1",
+    "tailwindcss": "^4.2.2",
+    "twilio": "^5.13.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0"
+  }
+}
