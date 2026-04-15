@@ -3,6 +3,7 @@ import type {
   BuyerJacketMeasurements,
   BuyerTrouserMeasurements,
   BuyerWaistcoatMeasurements,
+  JacketMeasurements,
   Listing,
   ListingStatus
 } from "@/lib/types";
@@ -65,12 +66,12 @@ function upperSeed(
   overrides: Partial<BuyerJacketMeasurements> = {},
   options?: Partial<Pick<Listing, "material" | "pattern" | "primaryColor" | "price" | "fabricType" | "fabricWeight" | "countryOfOrigin">>
 ): ListingSeed {
-  const measurements = {
-    chest: overrides.chest ?? jacket.chest,
-    waist: overrides.waist ?? jacket.waist,
-    shoulders: overrides.shoulders ?? jacket.shoulders,
-    bodyLength: overrides.bodyLength ?? jacket.bodyLength,
-    sleeveLength: overrides.sleeveLength ?? jacket.sleeveLength,
+  const measurements: JacketMeasurements = {
+    chest: overrides.chest ?? jacket.chest ?? 0,
+    waist: overrides.waist ?? jacket.waist ?? 0,
+    shoulders: overrides.shoulders ?? jacket.shoulders ?? 0,
+    bodyLength: overrides.bodyLength ?? jacket.bodyLength ?? 0,
+    sleeveLength: overrides.sleeveLength ?? jacket.sleeveLength ?? 0,
     sleeveLengthAllowance: overrides.sleeveLengthAllowance ?? 0
   };
 
@@ -87,10 +88,10 @@ function upperSeed(
             ? "Medium"
             : "40R",
     trouserSizeLabel: "",
-    chest: measurements.chest,
-    shoulder: measurements.shoulders,
-    waist: measurements.waist,
-    sleeve: measurements.sleeveLength,
+    chest: measurements.chest ?? 0,
+    shoulder: measurements.shoulders ?? 0,
+    waist: measurements.waist ?? 0,
+    sleeve: measurements.sleeveLength ?? 0,
     inseam: 0,
     outseam: 0,
     material: options?.material ?? (category === "shirt" ? "cotton" : category === "sweater" ? "cashmere_blend" : "wool"),
@@ -101,10 +102,10 @@ function upperSeed(
     fabricWeight: options?.fabricWeight ?? "medium",
     fabricType:
       options?.fabricType ??
-      (category === "shirt" ? "oxford" : category === "coat" ? "melton" : category === "sweater" ? "fine_knit" : "worsted"),
+      (category === "shirt" ? "oxford" : category === "coat" ? "flannel" : category === "sweater" ? "fine_knit" : "twill"),
     fabricWeave: category === "shirt" ? "twill" : "twill",
     condition: "used_excellent",
-    vintage: false,
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: options?.price ?? (category === "coat" ? 365 : category === "shirt" ? 78 : category === "sweater" ? 98 : 240),

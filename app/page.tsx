@@ -113,12 +113,16 @@ export default async function HomePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-r from-[rgba(252,252,250,0.96)] via-[rgba(252,252,250,0.82)] via-42% to-[rgba(252,252,250,0.12)] to-[82%]" />
           <div className="absolute inset-0 bg-gradient-to-t from-[rgba(252,252,250,0.14)] via-transparent to-[rgba(252,252,250,0.06)]" />
-          <div className="relative z-10 flex min-h-[26rem] items-center px-4 py-10 sm:min-h-[29rem] sm:px-5 lg:min-h-[36rem] lg:px-6">
-              <div className="min-w-0 max-w-xl">
-                <h1 className="editorial flex flex-col gap-4 text-[2.7rem] font-semibold leading-[0.94] text-stone-950 sm:text-[3.45rem]">
-                  <span className="block">TailorGraph</span>
-                  <span className="block">Marketplace</span>
-                </h1>
+          <div className="relative z-10 flex min-h-[26rem] items-center px-4 sm:min-h-[29rem] sm:px-5 lg:min-h-[36rem] lg:px-6">
+              <div className="min-w-0 max-w-xl self-center">
+                <div className="editorial flex flex-col gap-5 text-stone-950">
+                  <h1 className="text-[3rem] font-semibold leading-[0.94] sm:text-[3.8rem]">
+                    TailorGraph
+                  </h1>
+                  <p className="text-[1.5rem] font-semibold leading-tight sm:text-[1.9rem]">
+                    The smart way to shop menswear.
+                  </p>
+                </div>
                 <div className="editorial mt-8 max-w-xl text-lg leading-8 text-stone-700 lg:max-w-[35rem]">
                   <p>Use your measurements to find garments that actually fit.</p>
                   <p className="mt-1">
@@ -139,20 +143,22 @@ export default async function HomePage() {
       </section>
 
       <PageWrap maxWidth="max-w-7xl">
-        <section className="border-b border-stone-300/70 py-10">
-          <div className="max-w-2xl">
-            <h2 className="editorial mt-2 text-[2rem] font-semibold leading-tight text-stone-950">
-              Start with a category
-            </h2>
-            <p className="mt-3 text-base leading-7 text-stone-700">
-              Browse by category, then refine by your measurements.
-            </p>
-            <div className="mt-5">
+        <section className="border-b border-stone-300/70 pb-10 pt-5">
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-end">
+            <div className="max-w-2xl pt-0">
+              <h2 className="editorial mt-0 text-[2rem] font-semibold leading-tight text-stone-950">
+                Browse the Marketplace
+              </h2>
+              <p className="mt-3 text-base leading-7 text-stone-700">
+                Start with a category or simply view all listings.
+              </p>
+            </div>
+            <div className="flex xl:justify-end">
               <Link
                 href="/marketplace"
-                className="inline-flex items-center rounded-[0.9rem] border border-[color:rgba(110,53,33,0.22)] bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
+                className="inline-flex items-center rounded-[0.95rem] border border-[color:rgba(110,53,33,0.22)] bg-[var(--accent)] px-7 py-4 text-[1.02rem] font-semibold text-white transition hover:brightness-95"
               >
-                Browse All Listings
+                View All Listings
               </Link>
             </div>
           </div>

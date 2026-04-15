@@ -255,7 +255,7 @@ function buildListingPayloadFromDraft(
   sellerLocation: string,
   status: ListingStatus
 ) {
-  const category = draftStringValue(draft, "category") as
+  const category = sellerDraftStringValue(draft, "category") as
     | "jacket"
     | "two_piece_suit"
     | "three_piece_suit"
@@ -383,7 +383,7 @@ function buildListingPayloadFromDraft(
       allowOffers: sellerDraftStringValue(draft, "allowOffers") === "yes",
       price: sellerDraftNumberValue(draft, "price"),
       shippingPrice: estimateShippingCost(category, sizeLabel),
-      shippingIncluded: false,
+      shippingIncluded: false as const,
       shippingMethod: "ship" as const,
       processingDays: 3,
       location: sellerLocation,
@@ -2921,7 +2921,7 @@ export async function forceCreateListingAction(formData: FormData) {
 
   const draft = parseSellerListingDraft(stringValue(formData, "sellerListingDraft"));
   const media = parseSellerListingMedia(stringValue(formData, "sellerListingMedia"));
-  const listingStatus = listingStatusFromIntent(draftStringValue(draft, "listingIntent"));
+  const listingStatus = listingStatusFromIntent(sellerDraftStringValue(draft, "listingIntent"));
   const { input } = buildListingPayloadFromDraft(draft, media, sellerLocation, listingStatus);
 
   const createdListing = await createListing(user, input);

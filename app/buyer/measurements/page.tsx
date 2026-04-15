@@ -491,7 +491,19 @@ export default async function BuyerMeasurementsPage({
   const buyerMeasurementCategorySave = firstValue(params.buyerMeasurementCategorySave);
   const buyerMeasurementDraft = parseMeasurementDraft(firstValue(params.buyerMeasurementDraft));
 
-  const measurementInputDefaults = {
+  const measurementFitPreference = firstValue(params.measurementFitPreference);
+  const measurementInputDefaults: {
+    height?: number;
+    weight?: number;
+    bodyChest?: number;
+    bodyWaist?: number;
+    bodyHips?: number;
+    bodyShoulders?: number;
+    bodySleeve?: number;
+    neck?: number;
+    fitPreference?: BuyerProfile["fitPreference"];
+    fillMissingOnly?: boolean;
+  } = {
     height: parseOptionalNumberParam(firstValue(params.measurementHeight)),
     weight: parseOptionalNumberParam(firstValue(params.measurementWeight)),
     bodyChest: parseOptionalNumberParam(firstValue(params.measurementBodyChest)),
@@ -501,13 +513,13 @@ export default async function BuyerMeasurementsPage({
     bodySleeve: parseOptionalNumberParam(firstValue(params.measurementBodySleeve)),
     neck: parseOptionalNumberParam(firstValue(params.measurementNeck)),
     fitPreference:
-      firstValue(params.measurementFitPreference) === "trim" ||
-      firstValue(params.measurementFitPreference) === "classic" ||
-      firstValue(params.measurementFitPreference) === "relaxed"
-        ? firstValue(params.measurementFitPreference)
+      measurementFitPreference === "trim" ||
+      measurementFitPreference === "classic" ||
+      measurementFitPreference === "relaxed"
+        ? measurementFitPreference
         : undefined,
     fillMissingOnly: firstValue(params.measurementFillMissingOnly) === "yes"
-  } as const;
+  };
 
   const bodyWarningReturnTo = withMeasurementsQuery(activeMode, {
     ...(activeMode === "setup" && setupPath ? { setup: setupPath } : {}),

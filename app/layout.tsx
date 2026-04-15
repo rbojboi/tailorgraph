@@ -1,14 +1,6 @@
 import type { Metadata } from "next";
-import { Libre_Baskerville } from "next/font/google";
 import { SiteHeader } from "@/components/site-header";
 import "./globals.css";
-
-const libreBaskerville = Libre_Baskerville({
-  subsets: ["latin"],
-  variable: "--font-editorial",
-  weight: ["400", "700"],
-  display: "swap"
-});
 
 export const metadata: Metadata = {
   title: "TailorGraph",
@@ -22,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={libreBaskerville.variable}>
+      <body>
         <SiteHeader />
         {children}
       </body>

@@ -444,6 +444,7 @@ export default async function BuyerPage({
                             orderId={order.id}
                             canRate={canRateOrder(order)}
                             canConfirmDelivery={order.status === "shipped" || order.status === "processing"}
+                            canCancel={["pending_payment", "paid", "processing"].includes(order.status)}
                             canReturn={canReturnOrder(order)}
                             canReportIssue={canReportIssue(order)}
                             returnTo={`/buyer?purchaseStatus=${selectedPurchaseStatus}&saved=issue`}

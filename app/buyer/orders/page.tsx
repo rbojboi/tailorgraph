@@ -7,6 +7,7 @@ import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
 import { OrderRatingStars } from "@/components/order-rating-stars";
 import { AppShell, PageWrap, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
+import { formatDisplayValue } from "@/lib/display";
 import { ensureSeedData, listBuyerOrders } from "@/lib/store";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
