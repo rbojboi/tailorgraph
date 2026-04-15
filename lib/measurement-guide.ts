@@ -11,6 +11,7 @@ import {
   runBuyerBodyMeasurementSanityCheck,
   type BuyerBodyMeasurementInputs,
   type BuyerBodyMeasurementSanityCheckResult,
+  type BuyerGeneratedCategoryConfidence,
   type BuyerGeneratedMeasurementConfidenceReport,
   type BuyerGeneratedFieldConfidence
 } from "@/lib/measurement-guide-support";
@@ -412,13 +413,33 @@ function buildAnchorFieldConfidence(
   };
 }
 
-function buildCategoryConfidenceFromFields(fields: BuyerGeneratedFieldConfidence[]) {
+function buildCategoryConfidenceFromFields(fields: BuyerGeneratedFieldConfidence[]): BuyerGeneratedCategoryConfidence {
   const confidenceScore = roundScore(average(fields.map((field) => field.confidenceScore)));
   return {
     confidenceLevel: confidenceScore >= 80 ? "high" : confidenceScore >= 60 ? "medium" : "low",
     confidenceScore,
     reasons: fields.flatMap((field) => field.reasons).slice(0, 3)
   };
+}
+
+function getAnchorSleeveLength(
+  anchorCategory: AnchorCategory,
+  anchor:
+    | Partial<JacketMeasurements>
+    | Partial<WaistcoatMeasurements>
+    | null
+    | undefined,
+  profile: BuyerProfile
+) {
+  if (!anchor) {
+    return profile.sleeve || null;
+  }
+
+  if (anchorCategory === "waistcoat") {
+    return profile.sleeve || null;
+  }
+
+  return "sleeveLength" in anchor ? anchor.sleeveLength ?? null : null;
 }
 
 function inferUpperBodyReferenceInputsFromAnchor(
@@ -476,47 +497,69 @@ function inferUpperBodyReferenceInputsFromAnchor(
     height: "none"
   };
 
+  const anchorChest = anchor.chest ?? ((profile.chest || 40) / 2 + ease.jacket / 2);
+  const anchorWaist = anchor.waist ?? ((profile.waist || 34) / 2 + Math.max(ease.jacket - 1, 2) / 2);
+  const anchorShoulders = anchor.shoulders ?? (profile.shoulder || 18);
+  const anchorBodyLength =
+    anchor.bodyLength ??
+    (() => {
+      const referenceHeight = profile.height || 71;
+      switch (anchorCategory) {
+        case "coat":
+          return referenceHeight * multiplierByFit(fitPreference, { trim: 0.54, classic: 0.56, relaxed: 0.58 });
+        case "sweater":
+          return referenceHeight * multiplierByFit(fitPreference, { trim: 0.39, classic: 0.4, relaxed: 0.41 });
+        case "waistcoat":
+          return referenceHeight * 0.32;
+        case "shirt":
+          return referenceHeight * 0.42;
+        default:
+          return referenceHeight * multiplierByFit(fitPreference, { trim: 0.42, classic: 0.43, relaxed: 0.44 });
+      }
+    })();
+  const anchorSleeveLength = getAnchorSleeveLength(anchorCategory, anchor, profile);
+
   const inferredChest =
     anchorCategory === "shirt"
-      ? inferChestFromGarmentHalfWidth(anchor.chest, ease.shirt)
+      ? inferChestFromGarmentHalfWidth(anchorChest, ease.shirt)
       : anchorCategory === "coat"
-        ? inferChestFromGarmentHalfWidth(anchor.chest, ease.coat)
+        ? inferChestFromGarmentHalfWidth(anchorChest, ease.coat)
         : anchorCategory === "sweater"
-          ? inferChestFromGarmentHalfWidth(anchor.chest, ease.sweater)
+          ? inferChestFromGarmentHalfWidth(anchorChest, ease.sweater)
           : anchorCategory === "waistcoat"
-            ? inferChestFromGarmentHalfWidth(anchor.chest, ease.waistcoat)
-            : inferChestFromGarmentHalfWidth(anchor.chest, ease.jacket);
+            ? inferChestFromGarmentHalfWidth(anchorChest, ease.waistcoat)
+            : inferChestFromGarmentHalfWidth(anchorChest, ease.jacket);
   sourceQualities.chest = anchorCategory === "waistcoat" ? "medium" : "high";
 
   const inferredWaist =
     anchorCategory === "shirt"
-      ? inferWaistFromGarmentHalfWidth(anchor.waist, Math.max(ease.shirt - 1, 2))
+      ? inferWaistFromGarmentHalfWidth(anchorWaist, Math.max(ease.shirt - 1, 2))
       : anchorCategory === "coat"
-        ? inferWaistFromGarmentHalfWidth(anchor.waist, Math.max(ease.coat - 1, 2))
+        ? inferWaistFromGarmentHalfWidth(anchorWaist, Math.max(ease.coat - 1, 2))
         : anchorCategory === "sweater"
-          ? inferWaistFromGarmentHalfWidth(anchor.waist, Math.max(ease.sweater - 0.5, 2))
+          ? inferWaistFromGarmentHalfWidth(anchorWaist, Math.max(ease.sweater - 0.5, 2))
           : anchorCategory === "waistcoat"
-            ? inferWaistFromGarmentHalfWidth(anchor.waist, Math.max(ease.waistcoat - 0.5, 2))
-            : inferWaistFromGarmentHalfWidth(anchor.waist, Math.max(ease.jacket - 1, 2));
+            ? inferWaistFromGarmentHalfWidth(anchorWaist, Math.max(ease.waistcoat - 0.5, 2))
+            : inferWaistFromGarmentHalfWidth(anchorWaist, Math.max(ease.jacket - 1, 2));
   sourceQualities.waist = anchorCategory === "waistcoat" ? "medium" : "high";
 
   const inferredShoulders =
     anchorCategory === "coat"
-      ? anchor.shoulders - 0.5
+      ? anchorShoulders - 0.5
       : anchorCategory === "waistcoat"
-        ? anchor.shoulders / 0.72
-        : anchor.shoulders;
+        ? anchorShoulders / 0.72
+        : anchorShoulders;
   sourceQualities.shoulders = anchorCategory === "waistcoat" ? "low" : "high";
 
   const inferredArmLength =
     anchorCategory === "shirt"
-      ? anchor.sleeveLength
+      ? anchorSleeveLength
       : anchorCategory === "coat"
-        ? anchor.sleeveLength - 0.25
+        ? anchorSleeveLength === null ? null : anchorSleeveLength - 0.25
         : anchorCategory === "sweater"
-          ? anchor.sleeveLength
+          ? anchorSleeveLength
           : anchorCategory === "jacket"
-            ? anchor.sleeveLength + 0.25
+            ? anchorSleeveLength === null ? null : anchorSleeveLength + 0.25
             : profile.sleeve || null;
   sourceQualities.sleeveLength =
     anchorCategory === "waistcoat"
@@ -525,8 +568,10 @@ function inferUpperBodyReferenceInputsFromAnchor(
         : "none"
       : "high";
 
-  const inferredHeight = inferHeightFromBodyLength(anchor.bodyLength, fitPreference, anchorCategory);
+  const inferredHeight = inferHeightFromBodyLength(anchorBodyLength, fitPreference, anchorCategory);
   sourceQualities.height = anchorCategory === "waistcoat" ? "medium" : "high";
+  const anchorNeck =
+    anchorCategory === "shirt" && "neck" in anchor && typeof anchor.neck === "number" ? anchor.neck : null;
 
   const inferredInputs: InferredReferenceInputs = {
     height: clampQuarter(inferredHeight),
@@ -539,9 +584,7 @@ function inferUpperBodyReferenceInputsFromAnchor(
     shoulders: clampQuarter(inferredShoulders),
     sleeveLength: inferredArmLength === null ? null : clampQuarter(clampToRange(inferredArmLength, 20, 32)),
     neck:
-      anchorCategory === "shirt" && "neck" in anchor && anchor.neck
-        ? clampQuarter(anchor.neck - 0.5)
-        : profile.neck || null,
+      anchorNeck !== null ? clampQuarter(anchorNeck - 0.5) : profile.neck || null,
     fitPreference
   };
   const byField: Record<string, BuyerGeneratedFieldConfidence> = {
@@ -699,7 +742,7 @@ export function generateBuyerMeasurementSuggestions(inputs: BodyInputs): {
 }
 
 function confidenceFromAnchor(anchorCategory: AnchorCategory, profile: BuyerProfile): Confidence {
-  const completeTop = (measurements: JacketMeasurements | null | undefined, includeNeck = false) =>
+  const completeTop = (measurements: Partial<JacketMeasurements> | null | undefined, includeNeck = false) =>
     Boolean(
       measurements &&
         measurements.chest &&

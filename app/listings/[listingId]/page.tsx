@@ -7,6 +7,7 @@ import { getCountryDisplayName } from "@/lib/countries";
 import { formatCurrency, formatDisplayValue, formatEraLabel, formatListingSizeLabel, formatSizeLabel } from "@/lib/display";
 import { getFitRecommendation } from "@/lib/fit";
 import { ensureSeedData, findBuyerOrderForListing, findListingById, findUserById, listSavedListingsForUser } from "@/lib/store";
+import type { BuyerProfile } from "@/lib/types";
 
 function DetailField({ label, value }: { label: string; value?: string }) {
   return (
@@ -87,7 +88,7 @@ function countMeaningfulMeasurementValues(measurements: Record<string, unknown> 
   }).length;
 }
 
-function hasSavedFitMeasurements(profile: Awaited<ReturnType<typeof getCurrentUser>>["buyerProfile"] | undefined) {
+function hasSavedFitMeasurements(profile: BuyerProfile | undefined) {
   if (!profile) {
     return false;
   }
@@ -335,8 +336,9 @@ export default async function ListingDetail({
   const buyerOrder = user ? await findBuyerOrderForListing(user.id, listing.id) : null;
   const savedListingIds = new Set(user ? (await listSavedListingsForUser(user.id)).map((savedListing) => savedListing.id) : []);
 
-  const canShowFitGuidance = hasSavedFitMeasurements(user?.buyerProfile);
-  const fit = user && canShowFitGuidance ? getFitRecommendation(user.buyerProfile, listing) : null;
+  const buyerProfile = user?.buyerProfile;
+  const canShowFitGuidance = hasSavedFitMeasurements(buyerProfile);
+  const fit = buyerProfile && canShowFitGuidance ? getFitRecommendation(buyerProfile, listing) : null;
 
   const materialFields = [
     { label: listing.category === "sweater" ? "Material" : "Fabric", value: formatBuyerMaterialValue(listing.material) },

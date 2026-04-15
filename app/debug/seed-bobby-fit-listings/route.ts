@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import type { BuyerJacketMeasurements, BuyerTrouserMeasurements, Listing } from "@/lib/types";
+import type {
+  BuyerJacketMeasurements,
+  BuyerTrouserMeasurements,
+  JacketMeasurements,
+  Listing,
+  TrouserMeasurements
+} from "@/lib/types";
 import { createListing, ensureSeedData, findUserByUsername, listSellerInventory } from "@/lib/store";
 
 type ListingSeed = Omit<Listing, "id" | "sellerId" | "sellerDisplayName" | "createdAt">;
@@ -20,7 +26,14 @@ function requireJacketMeasurements(measurements: BuyerJacketMeasurements | null 
     throw new Error("Bobby needs saved jacket measurements before these fit-test listings can be generated.");
   }
 
-  return measurements;
+  return {
+    chest: measurements.chest,
+    waist: measurements.waist,
+    shoulders: measurements.shoulders,
+    bodyLength: measurements.bodyLength,
+    sleeveLength: measurements.sleeveLength,
+    sleeveLengthAllowance: measurements.sleeveLengthAllowance ?? 0
+  } satisfies JacketMeasurements;
 }
 
 function requireTrouserMeasurements(measurements: BuyerTrouserMeasurements | null | undefined) {
@@ -35,16 +48,24 @@ function requireTrouserMeasurements(measurements: BuyerTrouserMeasurements | nul
     throw new Error("Bobby needs saved trouser measurements before these fit-test listings can be generated.");
   }
 
-  return measurements;
+  return {
+    waist: measurements.waist,
+    waistAllowance: measurements.waistAllowance ?? 0,
+    hips: measurements.hips,
+    inseam: measurements.inseam,
+    inseamOutseamAllowance: measurements.inseamOutseamAllowance ?? 0,
+    outseam: measurements.outseam,
+    opening: measurements.opening
+  } satisfies TrouserMeasurements;
 }
 
 function baseUpperListing(
   category: Extract<Listing["category"], "jacket" | "coat">,
   title: string,
-  jacket: BuyerJacketMeasurements,
-  overrides: Partial<BuyerJacketMeasurements> = {}
+  jacket: JacketMeasurements,
+  overrides: Partial<JacketMeasurements> = {}
 ): ListingSeed {
-  const jacketMeasurements = {
+  const jacketMeasurements: JacketMeasurements = {
     chest: overrides.chest ?? jacket.chest,
     waist: overrides.waist ?? jacket.waist,
     shoulders: overrides.shoulders ?? jacket.shoulders,
@@ -71,10 +92,10 @@ function baseUpperListing(
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: category === "coat" ? "heavy" : "medium",
-    fabricType: category === "coat" ? "melton" : "worsted",
+    fabricType: category === "coat" ? "flannel" : "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
-    vintage: false,
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: category === "coat" ? 325 : 245,
@@ -108,10 +129,10 @@ function baseUpperListing(
 
 function baseTrouserListing(
   title: string,
-  trousers: BuyerTrouserMeasurements,
-  overrides: Partial<BuyerTrouserMeasurements> = {}
+  trousers: TrouserMeasurements,
+  overrides: Partial<TrouserMeasurements> = {}
 ): ListingSeed {
-  const trouserMeasurements = {
+  const trouserMeasurements: TrouserMeasurements = {
     waist: overrides.waist ?? trousers.waist,
     waistAllowance: overrides.waistAllowance ?? 0,
     hips: overrides.hips ?? trousers.hips,
@@ -139,10 +160,10 @@ function baseTrouserListing(
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: "medium",
-    fabricType: "worsted",
+    fabricType: "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
-    vintage: false,
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: 135,
@@ -171,8 +192,8 @@ function baseTrouserListing(
 }
 
 function buildSeedListings(
-  jacket: BuyerJacketMeasurements,
-  trousers: BuyerTrouserMeasurements
+  jacket: JacketMeasurements,
+  trousers: TrouserMeasurements
 ): ListingSeed[] {
   return [
     baseUpperListing("jacket", "Fit Test: Ideal Jacket", jacket),

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getEstimatedArrivalLabel, normalizeSmsNumber } from "./notifications.ts";
-import type { Listing, Order } from "./types.ts";
+import { getEstimatedArrivalLabel, normalizeSmsNumber } from "./notifications";
+import type { Listing, Order } from "./types";
 
 function buildOrder(overrides: Partial<Order> = {}): Order {
   return {
@@ -33,6 +33,14 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     shippingMethod: "ship",
     carrier: null,
     trackingNumber: null,
+    trackingUrl: null,
+    trackingStatus: null,
+    shippingEta: null,
+    shippingLabelUrl: null,
+    shippingProvider: null,
+    shippingProviderShipmentId: null,
+    shippingProviderRateId: null,
+    shippingProviderTransactionId: null,
     issueReason: null,
     sellerNotes: null,
     shippedAt: null,
@@ -71,7 +79,7 @@ function buildListing(overrides: Partial<Listing> = {}): Listing {
     lapel: "notch",
     fabricWeight: "medium",
     fabricType: "flannel",
-    fabricWeave: "plain",
+    fabricWeave: "twill",
     condition: "used_excellent",
     vintage: "modern",
     returnsAccepted: true,

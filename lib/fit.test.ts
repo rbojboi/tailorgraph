@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getFitRecommendation } from "./fit.ts";
-import type { BuyerProfile, Listing } from "./types.ts";
+import { getFitRecommendation } from "./fit";
+import type { BuyerProfile, Listing } from "./types";
 
 function makeProfile(overrides: Partial<BuyerProfile> = {}): BuyerProfile {
   return {
@@ -61,7 +61,7 @@ function makeListing(overrides: Partial<Listing> = {}): Listing {
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: "medium",
-    fabricType: "worsted",
+    fabricType: "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
     vintage: "modern",

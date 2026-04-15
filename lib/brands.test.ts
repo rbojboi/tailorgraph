@@ -7,7 +7,7 @@ import {
   resolveListingBrandInput,
   searchBrandSuggestions,
   searchBrands
-} from "./brands.ts";
+} from "./brands";
 
 test("resolves exact canonical brand matches", () => {
   assert.equal(resolveBrand("Burberry")?.displayName, "Burberry");

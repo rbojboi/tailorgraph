@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { getCountryDisplayName, resolveCountry, resolveListingCountryInput, searchCountrySuggestions } from "./countries.ts";
+import { getCountryDisplayName, resolveCountry, resolveListingCountryInput, searchCountrySuggestions } from "./countries";
 
 test("resolves country aliases to canonical countries", () => {
   assert.equal(resolveCountry("P.R.C.")?.id, "china");

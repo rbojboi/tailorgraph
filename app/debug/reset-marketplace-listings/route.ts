@@ -5,7 +5,9 @@ import type {
   BuyerWaistcoatMeasurements,
   JacketMeasurements,
   Listing,
-  ListingStatus
+  ListingStatus,
+  TrouserMeasurements,
+  WaistcoatMeasurements
 } from "@/lib/types";
 import {
   createListing,
@@ -21,7 +23,7 @@ function q(value: number) {
   return Math.round(value * 4) / 4;
 }
 
-function requireJacket(measurements: BuyerJacketMeasurements | null | undefined) {
+function requireJacket(measurements: BuyerJacketMeasurements | null | undefined): JacketMeasurements {
   if (
     !measurements ||
     !measurements.chest ||
@@ -33,18 +35,30 @@ function requireJacket(measurements: BuyerJacketMeasurements | null | undefined)
     throw new Error("Bobby needs saved jacket measurements before resetting the marketplace seed set.");
   }
 
-  return measurements;
+  return {
+    chest: measurements.chest,
+    waist: measurements.waist,
+    shoulders: measurements.shoulders,
+    bodyLength: measurements.bodyLength,
+    sleeveLength: measurements.sleeveLength,
+    sleeveLengthAllowance: measurements.sleeveLengthAllowance ?? 0
+  };
 }
 
-function requireWaistcoat(measurements: BuyerWaistcoatMeasurements | null | undefined) {
+function requireWaistcoat(measurements: BuyerWaistcoatMeasurements | null | undefined): WaistcoatMeasurements {
   if (!measurements || !measurements.chest || !measurements.waist || !measurements.shoulders || !measurements.bodyLength) {
     throw new Error("Bobby needs saved waistcoat measurements before resetting the marketplace seed set.");
   }
 
-  return measurements;
+  return {
+    chest: measurements.chest,
+    waist: measurements.waist,
+    shoulders: measurements.shoulders,
+    bodyLength: measurements.bodyLength
+  };
 }
 
-function requireTrousers(measurements: BuyerTrouserMeasurements | null | undefined) {
+function requireTrousers(measurements: BuyerTrouserMeasurements | null | undefined): TrouserMeasurements {
   if (
     !measurements ||
     !measurements.waist ||
@@ -56,22 +70,30 @@ function requireTrousers(measurements: BuyerTrouserMeasurements | null | undefin
     throw new Error("Bobby needs saved trouser measurements before resetting the marketplace seed set.");
   }
 
-  return measurements;
+  return {
+    waist: measurements.waist,
+    waistAllowance: measurements.waistAllowance ?? 0,
+    hips: measurements.hips,
+    inseam: measurements.inseam,
+    inseamOutseamAllowance: measurements.inseamOutseamAllowance ?? 0,
+    outseam: measurements.outseam,
+    opening: measurements.opening
+  };
 }
 
 function upperSeed(
   title: string,
   category: Extract<Listing["category"], "jacket" | "shirt" | "coat" | "sweater">,
-  jacket: BuyerJacketMeasurements,
-  overrides: Partial<BuyerJacketMeasurements> = {},
+  jacket: JacketMeasurements,
+  overrides: Partial<JacketMeasurements> = {},
   options?: Partial<Pick<Listing, "material" | "pattern" | "primaryColor" | "price" | "fabricType" | "fabricWeight" | "countryOfOrigin">>
 ): ListingSeed {
   const measurements: JacketMeasurements = {
-    chest: overrides.chest ?? jacket.chest ?? 0,
-    waist: overrides.waist ?? jacket.waist ?? 0,
-    shoulders: overrides.shoulders ?? jacket.shoulders ?? 0,
-    bodyLength: overrides.bodyLength ?? jacket.bodyLength ?? 0,
-    sleeveLength: overrides.sleeveLength ?? jacket.sleeveLength ?? 0,
+    chest: overrides.chest ?? jacket.chest,
+    waist: overrides.waist ?? jacket.waist,
+    shoulders: overrides.shoulders ?? jacket.shoulders,
+    bodyLength: overrides.bodyLength ?? jacket.bodyLength,
+    sleeveLength: overrides.sleeveLength ?? jacket.sleeveLength,
     sleeveLengthAllowance: overrides.sleeveLengthAllowance ?? 0
   };
 
@@ -88,10 +110,10 @@ function upperSeed(
             ? "Medium"
             : "40R",
     trouserSizeLabel: "",
-    chest: measurements.chest ?? 0,
-    shoulder: measurements.shoulders ?? 0,
-    waist: measurements.waist ?? 0,
-    sleeve: measurements.sleeveLength ?? 0,
+    chest: measurements.chest,
+    shoulder: measurements.shoulders,
+    waist: measurements.waist,
+    sleeve: measurements.sleeveLength,
     inseam: 0,
     outseam: 0,
     material: options?.material ?? (category === "shirt" ? "cotton" : category === "sweater" ? "cashmere_blend" : "wool"),
@@ -155,11 +177,11 @@ function upperSeed(
 
 function waistcoatSeed(
   title: string,
-  waistcoat: BuyerWaistcoatMeasurements,
-  overrides: Partial<BuyerWaistcoatMeasurements> = {},
+  waistcoat: WaistcoatMeasurements,
+  overrides: Partial<WaistcoatMeasurements> = {},
   options?: Partial<Pick<Listing, "material" | "pattern" | "primaryColor" | "price">>
 ): ListingSeed {
-  const measurements = {
+  const measurements: WaistcoatMeasurements = {
     chest: overrides.chest ?? waistcoat.chest,
     waist: overrides.waist ?? waistcoat.waist,
     shoulders: overrides.shoulders ?? waistcoat.shoulders,
@@ -184,10 +206,10 @@ function waistcoatSeed(
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: "medium",
-    fabricType: "worsted",
+    fabricType: "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
-    vintage: false,
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: options?.price ?? 110,
@@ -217,11 +239,11 @@ function waistcoatSeed(
 
 function trouserSeed(
   title: string,
-  trousers: BuyerTrouserMeasurements,
-  overrides: Partial<BuyerTrouserMeasurements> = {},
+  trousers: TrouserMeasurements,
+  overrides: Partial<TrouserMeasurements> = {},
   options?: Partial<Pick<Listing, "material" | "pattern" | "primaryColor" | "price">>
 ): ListingSeed {
-  const measurements = {
+  const measurements: TrouserMeasurements = {
     waist: overrides.waist ?? trousers.waist,
     waistAllowance: overrides.waistAllowance ?? 0,
     hips: overrides.hips ?? trousers.hips,
@@ -249,10 +271,10 @@ function trouserSeed(
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: "medium",
-    fabricType: "worsted",
+    fabricType: "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
-    vintage: false,
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: options?.price ?? 120,
@@ -281,9 +303,9 @@ function trouserSeed(
 }
 
 function buildSeeds(
-  jacket: BuyerJacketMeasurements,
-  waistcoat: BuyerWaistcoatMeasurements,
-  trousers: BuyerTrouserMeasurements
+  jacket: JacketMeasurements,
+  waistcoat: WaistcoatMeasurements,
+  trousers: TrouserMeasurements
 ): ListingSeed[] {
   return [
     upperSeed("Mid Fit Seed: Navy Jacket With Slightly Broad Shoulders", "jacket", jacket, {
@@ -312,7 +334,7 @@ function buildSeeds(
       shoulders: q(jacket.shoulders + 1),
       bodyLength: q(jacket.bodyLength + 8),
       sleeveLength: q(jacket.sleeveLength + 1)
-    }, { primaryColor: "gray_charcoal", price: 348, fabricType: "melton", fabricWeight: "heavy" }),
+    }, { primaryColor: "gray_charcoal", price: 348, fabricType: "flannel", fabricWeight: "heavy" }),
     waistcoatSeed("Mid Fit Seed: Close Waistcoat With Slightly Full Chest", waistcoat, {
       chest: q(waistcoat.chest + 1.25),
       waist: q(waistcoat.waist + 1),

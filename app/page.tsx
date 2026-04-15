@@ -65,6 +65,14 @@ const categorySpotlights = [
   }
 ] as const;
 
+type SpotlightCategory = Listing["category"];
+type CategorySpotlight = {
+  key: string;
+  label: string;
+  categories: readonly SpotlightCategory[];
+  href: string;
+};
+
 function imageMediaForListing(listing: Listing) {
   return listing.media.find((media) => media.kind === "image") ?? null;
 }
@@ -72,7 +80,7 @@ function imageMediaForListing(listing: Listing) {
 function buildCategoryTiles(listings: Listing[]) {
   const usedListingIds = new Set<string>();
 
-  return categorySpotlights.map((spotlight) => {
+  return (categorySpotlights as readonly CategorySpotlight[]).map((spotlight) => {
     const matchingListings = listings.filter((listing) => spotlight.categories.includes(listing.category));
     const selectedListing =
       matchingListings.find((listing) => {

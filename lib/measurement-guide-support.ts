@@ -70,10 +70,7 @@ type SanityContext = {
   warnedRelativeFields: Set<keyof BuyerBodyMeasurementInputs>;
 };
 
-type FieldSignal = {
-  score: number;
-  reasons: string[];
-};
+type FieldSignal = BuyerGeneratedFieldConfidence;
 
 type FieldDefinition = {
   key: string;

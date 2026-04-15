@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import type { BuyerJacketMeasurements, Listing } from "@/lib/types";
+import type { BuyerJacketMeasurements, JacketMeasurements, Listing } from "@/lib/types";
 import { createListing, ensureSeedData, findUserByUsername, listSellerInventory } from "@/lib/store";
 
 type ListingSeed = Omit<Listing, "id" | "sellerId" | "sellerDisplayName" | "createdAt">;
 
-function requireJacketMeasurements(measurements: BuyerJacketMeasurements | null | undefined) {
+function requireJacketMeasurements(measurements: BuyerJacketMeasurements | null | undefined): JacketMeasurements {
   if (
     !measurements ||
     !measurements.chest ||
@@ -16,20 +16,36 @@ function requireJacketMeasurements(measurements: BuyerJacketMeasurements | null 
     throw new Error("Bobby needs saved jacket measurements before the strict-fit test listing can be created.");
   }
 
-  return measurements;
+  return {
+    chest: measurements.chest,
+    waist: measurements.waist,
+    shoulders: measurements.shoulders,
+    bodyLength: measurements.bodyLength,
+    sleeveLength: measurements.sleeveLength,
+    sleeveLengthAllowance: measurements.sleeveLengthAllowance ?? 0
+  };
 }
 
-function buildStrictJacketListing(jacket: BuyerJacketMeasurements): ListingSeed {
+function buildStrictJacketListing(jacket: JacketMeasurements): ListingSeed {
+  const jacketMeasurements: JacketMeasurements = {
+    chest: jacket.chest,
+    waist: jacket.waist,
+    shoulders: jacket.shoulders,
+    bodyLength: jacket.bodyLength,
+    sleeveLength: jacket.sleeveLength,
+    sleeveLengthAllowance: 0.5
+  };
+
   return {
     title: "Strict Filter Test: Exact Bobby Jacket",
     brand: "TailorGraph Fit Lab",
     category: "jacket",
     sizeLabel: "40R",
     trouserSizeLabel: "",
-    chest: jacket.chest,
-    shoulder: jacket.shoulders,
-    waist: jacket.waist,
-    sleeve: jacket.sleeveLength,
+    chest: jacketMeasurements.chest,
+    shoulder: jacketMeasurements.shoulders,
+    waist: jacketMeasurements.waist,
+    sleeve: jacketMeasurements.sleeveLength,
     inseam: 0,
     outseam: 0,
     material: "wool",
@@ -38,10 +54,10 @@ function buildStrictJacketListing(jacket: BuyerJacketMeasurements): ListingSeed 
     countryOfOrigin: "united_states",
     lapel: "notch",
     fabricWeight: "medium",
-    fabricType: "worsted",
+    fabricType: "twill",
     fabricWeave: "twill",
     condition: "used_excellent",
-    vintage: false as unknown as Listing["vintage"],
+    vintage: "modern",
     returnsAccepted: true,
     allowOffers: true,
     price: 255,
@@ -53,14 +69,7 @@ function buildStrictJacketListing(jacket: BuyerJacketMeasurements): ListingSeed 
     distanceMiles: 10,
     description: "Exact-match jacket listing for validating strict marketplace profile filters.",
     media: [],
-    jacketMeasurements: {
-      chest: jacket.chest,
-      waist: jacket.waist,
-      shoulders: jacket.shoulders,
-      bodyLength: jacket.bodyLength,
-      sleeveLength: jacket.sleeveLength,
-      sleeveLengthAllowance: 0.5
-    },
+    jacketMeasurements,
     jacketSpecs: {
       cut: "single_breasted",
       lapel: "notch",

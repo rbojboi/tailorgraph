@@ -1397,6 +1397,7 @@ export async function createUser(input: {
     name: String(userResult.rows[0].name),
     username: String(userResult.rows[0].username),
     businessName: "",
+    profileDescription: "",
     showPersonalNameOnProfile: false,
     showBusinessNameOnProfile: false,
     publicLocationMode: "country",

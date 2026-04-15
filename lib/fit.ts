@@ -3,6 +3,7 @@ import type {
   BuyerProfile,
   BuyerTrouserMeasurements,
   BuyerWaistcoatMeasurements,
+  JacketMeasurements,
   Listing
 } from "./types.ts";
 
@@ -749,8 +750,8 @@ function getListingMeasurements(listing: Listing): ListingMeasurementTargets {
 
 function deriveUpperBodyFallbackFromJacket(
   category: Listing["category"],
-  jacketMeasurements: BuyerJacketMeasurements
-): BuyerJacketMeasurements {
+  jacketMeasurements: JacketMeasurements
+): JacketMeasurements {
   const adjustments =
     category === "shirt" || category === "sweater" || category === "coat"
       ? JACKET_FALLBACK_ADJUSTMENTS[category]
@@ -767,13 +768,13 @@ function deriveUpperBodyFallbackFromJacket(
 }
 
 function deriveWaistcoatFallbackFromJacket(profile: BuyerProfile): BuyerWaistcoatMeasurements | null {
-  if (!profile.jacketMeasurements) {
+  const jacket = asCompleteJacketMeasurements(profile.jacketMeasurements);
+  if (!jacket) {
     return null;
   }
 
   const fitPreference = profile.fitPreference ?? "classic";
   const ease = FIT_EASE_BY_PREFERENCE[fitPreference];
-  const jacket = profile.jacketMeasurements;
   const jacketWaistAllowance = Math.max(ease.jacket - 1, 2) / 2;
   const waistcoatWaistAllowance = Math.max(ease.waistcoat - 0.5, 2) / 2;
   const inferredHeight = jacket.bodyLength / JACKET_BODY_LENGTH_MULTIPLIER[fitPreference];
@@ -796,18 +797,19 @@ function buildMeasurementTarget(
   }
 
   const offsets = getRangeOffsets(category, key);
+  const safeTarget: number = target!;
   return {
-    target,
-    range: offsets ? buildRange(target, offsets) : null
+    target: safeTarget,
+    range: offsets ? buildRange(safeTarget, offsets) : null
   };
 }
 
 function buildUpperBodyFitTargets(category: Listing["category"], measurements: UpperTargetMeasurements): Record<MeasurementKey, MeasurementTarget> {
   return {
-    chest: buildMeasurementTarget(category, "chest", measurements.chest),
-    shoulders: buildMeasurementTarget(category, "shoulders", measurements.shoulders),
-    body_length: buildMeasurementTarget(category, "body_length", measurements.bodyLength),
-    waist: buildMeasurementTarget(category, "waist", measurements.waist),
+    chest: buildMeasurementTarget(category, "chest", measurements.chest ?? null),
+    shoulders: buildMeasurementTarget(category, "shoulders", measurements.shoulders ?? null),
+    body_length: buildMeasurementTarget(category, "body_length", measurements.bodyLength ?? null),
+    waist: buildMeasurementTarget(category, "waist", measurements.waist ?? null),
     sleeve_length: buildMeasurementTarget(
       category,
       "sleeve_length",
@@ -825,12 +827,12 @@ function buildTrouserFitTargets(measurements: BuyerTrouserMeasurements): Record<
     chest: { target: null, range: null },
     shoulders: { target: null, range: null },
     body_length: { target: null, range: null },
-    waist: buildMeasurementTarget("trousers", "waist", measurements.waist),
+    waist: buildMeasurementTarget("trousers", "waist", measurements.waist ?? null),
     sleeve_length: { target: null, range: null },
-    hips: buildMeasurementTarget("trousers", "hips", measurements.hips),
-    inseam: buildMeasurementTarget("trousers", "inseam", measurements.inseam),
-    outseam: buildMeasurementTarget("trousers", "outseam", measurements.outseam),
-    opening: buildMeasurementTarget("trousers", "opening", measurements.opening)
+    hips: buildMeasurementTarget("trousers", "hips", measurements.hips ?? null),
+    inseam: buildMeasurementTarget("trousers", "inseam", measurements.inseam ?? null),
+    outseam: buildMeasurementTarget("trousers", "outseam", measurements.outseam ?? null),
+    opening: buildMeasurementTarget("trousers", "opening", measurements.opening ?? null)
   };
 }
 
@@ -860,6 +862,7 @@ function combineSourceNotes(notes: string[]) {
     return cleaned[0] ?? "";
   }
 
+  type SourceLabel = "jacket" | "trouser" | "waistcoat" | "coat" | "shirt" | "sweater";
   const labels = cleaned
     .map((note) => {
       if (note.includes("saved jacket measurements")) return "jacket";
@@ -870,7 +873,7 @@ function combineSourceNotes(notes: string[]) {
       if (note.includes("saved sweater measurements")) return "sweater";
       return null;
     })
-    .filter((label): label is string => Boolean(label));
+    .filter((label): label is SourceLabel => Boolean(label));
 
   if (labels.length === cleaned.length) {
     if (labels.length === 2) {
@@ -881,6 +884,30 @@ function combineSourceNotes(notes: string[]) {
   }
 
   return cleaned.join(" ");
+}
+
+function asCompleteJacketMeasurements(
+  measurements: BuyerJacketMeasurements | null | undefined
+): JacketMeasurements | null {
+  if (
+    !measurements ||
+    !hasMeaningfulValue(measurements.chest) ||
+    !hasMeaningfulValue(measurements.waist) ||
+    !hasMeaningfulValue(measurements.shoulders) ||
+    !hasMeaningfulValue(measurements.bodyLength) ||
+    !hasMeaningfulValue(measurements.sleeveLength)
+  ) {
+    return null;
+  }
+
+  return {
+    chest: measurements.chest!,
+    waist: measurements.waist!,
+    shoulders: measurements.shoulders!,
+    bodyLength: measurements.bodyLength!,
+    sleeveLength: measurements.sleeveLength!,
+    sleeveLengthAllowance: measurements.sleeveLengthAllowance ?? 0
+  };
 }
 
 function getFitTargetsForListing(profile: BuyerProfile, listing: Listing): FitTargets {
@@ -949,14 +976,16 @@ function getFitTargetsForListing(profile: BuyerProfile, listing: Listing): FitTa
     };
   }
 
-  if ((listing.category === "shirt" || listing.category === "sweater" || listing.category === "coat") && profile.jacketMeasurements) {
+  const completeJacketMeasurements = asCompleteJacketMeasurements(profile.jacketMeasurements);
+
+  if ((listing.category === "shirt" || listing.category === "sweater" || listing.category === "coat") && completeJacketMeasurements) {
     return {
       source: "jacket_fallback_adjusted",
       confidence: "medium",
       note: combineSourceNotes(["Guidance is adapted from your saved jacket measurements using category-specific ease adjustments."]),
       measurements: buildUpperBodyFitTargets(
         listing.category,
-        deriveUpperBodyFallbackFromJacket(listing.category, profile.jacketMeasurements)
+        deriveUpperBodyFallbackFromJacket(listing.category, completeJacketMeasurements)
       )
     };
   }
@@ -1194,7 +1223,7 @@ function tailoringRiskForAssessment(
   }
 
   if (allowanceBridgesToIdeal || allowanceBridgesToAcceptable) {
-    return allowanceBridgesToIdeal ? "easy" : "possible";
+    return allowanceBridgesToIdeal ? "easy" : "moderate";
   }
 
   if (key === "waist") {
@@ -1210,7 +1239,7 @@ function tailoringRiskForAssessment(
       return "easy";
     }
 
-    return severity === "major_issue" ? "risky" : "possible";
+    return severity === "major_issue" ? "risky" : "moderate";
   }
 
   if (key === "hips") {
@@ -1274,7 +1303,7 @@ function classifyMatrixSide(
   allowance: number
 ): { band: MatrixBand; allowanceSupported: boolean } {
   const idealMax = side.idealMax;
-  const allowanceSupported = side.requiresAllowance && difference > 0 && Math.max(0, allowance) >= difference;
+  const allowanceSupported = Boolean(side.requiresAllowance && difference > 0 && Math.max(0, allowance) >= difference);
 
   if (difference <= idealMax) {
     return { band: "ideal", allowanceSupported };
@@ -1336,9 +1365,11 @@ function scoreMatrixMeasurement(input: MeasurementInput, config: MatrixMeasureme
     };
   }
 
-  const difference = measurementDifference(target, actual);
+  const safeTarget: number = target!;
+  const safeActual: number = actual!;
+  const difference = measurementDifference(safeTarget, safeActual);
   const rawDirection: MeasurementDirection =
-    actual < target ? "too_small" : actual > target ? "too_large" : "close";
+    safeActual < safeTarget ? "too_small" : safeActual > safeTarget ? "too_large" : "close";
   const delta = adjustDeltaForPleats(Math.abs(difference), key, input.pleated);
   const side = rawDirection === "too_small" ? config.tooSmall : config.tooLarge;
   const classification =
@@ -1433,8 +1464,10 @@ function scoreMeasurement(input: MeasurementInput): MeasurementScoreResult {
     };
   }
 
-  const rangeState = getRangePosition(actual, effectiveRange, allowance);
-  const difference = measurementDifference(target, actual);
+  const safeTarget: number = target!;
+  const safeActual: number = actual!;
+  const rangeState = getRangePosition(safeActual, effectiveRange, allowance);
+  const difference = measurementDifference(safeTarget, safeActual);
   const severity: MeasurementSeverity =
     rangeState.rangePosition === "ideal"
       ? "good"
@@ -1486,7 +1519,7 @@ function scoreMeasurement(input: MeasurementInput): MeasurementScoreResult {
     },
     deduction,
     weightUsed: rule.weight,
-    hardStopReason: hardStopReasonForAssessment(key, rangeState.direction, actual, allowance, range, rule)
+    hardStopReason: hardStopReasonForAssessment(key, rangeState.direction, safeActual, allowance, effectiveRange, rule)
   };
 }
 
@@ -2045,7 +2078,7 @@ function shoulderAction(assessment: MeasurementAssessment | undefined): Tailorin
 }
 
 function chestAction(assessment: MeasurementAssessment | undefined): TailoringAction | null {
-  if (!assessment || assessment.direction !== "too_small" || assessment.severity === "good" || assessment.direction === "unknown") {
+  if (!assessment || assessment.direction !== "too_small" || assessment.severity === "good") {
     return null;
   }
 

@@ -11,7 +11,7 @@ import { MarketplaceRangeField } from "@/components/marketplace-range-field";
 import { SearchableChecklistFilter } from "@/components/searchable-checklist-filter";
 import { MarketplaceTrousersFilters } from "@/components/marketplace-trousers-filters";
 import { getMarketplaceSizeFilterConfig } from "@/lib/sizing";
-import type { MarketplaceFitMode } from "@/app/page";
+import type { MarketplaceFitMode } from "@/app/marketplace/page";
 import type { BuyerProfile } from "@/lib/types";
 
 function formatRange(value: number, halfSpread = 0.25) {
@@ -495,12 +495,13 @@ export function MarketplaceFilterSidebar({
 
   useEffect(() => {
     const form = filterRootRef.current?.closest("form");
-    if (!form) {
+    if (!(form instanceof HTMLFormElement)) {
       return;
     }
+    const formElement: HTMLFormElement = form;
 
     function handleSubmit(event: SubmitEvent) {
-      const formData = new FormData(form);
+      const formData = new FormData(formElement);
 
       if (searchModeRef.current === "strict" && !hasSubmittedMeasurementRange(formData)) {
         event.preventDefault();
@@ -514,29 +515,30 @@ export function MarketplaceFilterSidebar({
       }
     }
 
-    form.addEventListener("submit", handleSubmit);
-    return () => form.removeEventListener("submit", handleSubmit);
+    formElement.addEventListener("submit", handleSubmit);
+    return () => formElement.removeEventListener("submit", handleSubmit);
   }, [hasFitMeasurements, requiresFitMeasurements]);
 
   useEffect(() => {
     const form = filterRootRef.current?.closest("form");
-    if (!form) {
+    if (!(form instanceof HTMLFormElement)) {
       return;
     }
+    const formElement: HTMLFormElement = form;
 
     function handleInput() {
       if (fitProfileError !== "exact-empty") {
         return;
       }
 
-      const formData = new FormData(form);
+      const formData = new FormData(formElement);
       if (hasSubmittedMeasurementRange(formData)) {
         setFitProfileError(null);
       }
     }
 
-    form.addEventListener("input", handleInput);
-    return () => form.removeEventListener("input", handleInput);
+    formElement.addEventListener("input", handleInput);
+    return () => formElement.removeEventListener("input", handleInput);
   }, [fitProfileError]);
 
   useEffect(() => {
