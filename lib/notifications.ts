@@ -4,13 +4,6 @@ import { getAppUrl } from "@/lib/stripe";
 import { hasNotificationDelivery, recordNotificationDelivery } from "@/lib/store";
 import type { Listing, MessageThread, Order, User } from "@/lib/types";
 
-const resendApiKey = process.env.RESEND_API_KEY;
-const emailFrom = process.env.EMAIL_FROM;
-const emailReplyTo = process.env.EMAIL_REPLY_TO;
-const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
-const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
-
 let resendClient: Resend | null = null;
 let twilioClient: ReturnType<typeof twilio> | null = null;
 
@@ -21,6 +14,9 @@ type EmailInput = {
   subject: string;
   html: string;
   text: string;
+  category?: EmailSenderCategory;
+  fromOverride?: string;
+  replyToOverride?: string;
 };
 
 type SmsInput = {
@@ -61,15 +57,164 @@ type PasswordResetNotificationContext = {
   resetUrl: string;
 };
 
+export type EmailSenderCategory =
+  | "buyer_orders"
+  | "seller_orders"
+  | "messages"
+  | "fit"
+  | "alerts"
+  | "support"
+  | "hello"
+  | "updates"
+  | "no_reply";
+
+export const EMAIL_SENDER_TEST_CATEGORIES: EmailSenderCategory[] = [
+  "buyer_orders",
+  "seller_orders",
+  "messages",
+  "fit",
+  "alerts",
+  "support",
+  "hello",
+  "updates",
+  "no_reply"
+];
+
+type ParsedEmailSender = {
+  name: string | null;
+  address: string;
+  localPart: string;
+  domain: string;
+};
+
 export function isEmailNotificationConfigured() {
-  return Boolean(resendApiKey && emailFrom);
+  return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
 }
 
 export function isSmsNotificationConfigured() {
-  return Boolean(twilioAccountSid && twilioAuthToken && twilioFromNumber);
+  return Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM_NUMBER);
+}
+
+function parseEmailSender(value: string | undefined | null): ParsedEmailSender | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const angleMatch = trimmed.match(/^(.*?)<([^<>]+)>$/);
+  const rawAddress = angleMatch ? angleMatch[2].trim() : trimmed;
+  const addressParts = rawAddress.split("@");
+  if (addressParts.length !== 2 || !addressParts[0] || !addressParts[1]) {
+    return null;
+  }
+
+  const rawName = angleMatch ? angleMatch[1].trim().replace(/^"|"$/g, "") : null;
+
+  return {
+    name: rawName || null,
+    address: rawAddress,
+    localPart: addressParts[0],
+    domain: addressParts[1]
+  };
+}
+
+function formatEmailSender(name: string, address: string) {
+  return `${name} <${address}>`;
+}
+
+function senderDisplayNameForCategory(category: EmailSenderCategory) {
+  switch (category) {
+    case "buyer_orders":
+      return "TailorGraph Buyer Orders";
+    case "seller_orders":
+      return "TailorGraph Seller Orders";
+    case "messages":
+      return "TailorGraph Messages";
+    case "fit":
+      return "TailorGraph Fit";
+    case "alerts":
+      return "TailorGraph Alerts";
+    case "support":
+      return "TailorGraph Support";
+    case "hello":
+      return "TailorGraph Hello";
+    case "updates":
+      return "TailorGraph Updates";
+    case "no_reply":
+      return "TailorGraph";
+  }
+}
+
+function senderLocalPartForCategory(category: EmailSenderCategory) {
+  switch (category) {
+    case "buyer_orders":
+      return "buyer-orders";
+    case "seller_orders":
+      return "seller-orders";
+    case "messages":
+      return "messages";
+    case "fit":
+      return "fit";
+    case "alerts":
+      return "alerts";
+    case "support":
+      return "support";
+    case "hello":
+      return "hello";
+    case "updates":
+      return "updates";
+    case "no_reply":
+      return "noreply";
+  }
+}
+
+function explicitSenderForCategory(category: EmailSenderCategory) {
+  switch (category) {
+    case "buyer_orders":
+      return process.env.EMAIL_FROM_BUYER_ORDERS;
+    case "seller_orders":
+      return process.env.EMAIL_FROM_SELLER_ORDERS;
+    case "messages":
+      return process.env.EMAIL_FROM_MESSAGES;
+    case "fit":
+      return process.env.EMAIL_FROM_FIT;
+    case "alerts":
+      return process.env.EMAIL_FROM_ALERTS;
+    case "support":
+      return process.env.EMAIL_FROM_SUPPORT;
+    case "hello":
+      return process.env.EMAIL_FROM_HELLO;
+    case "updates":
+      return process.env.EMAIL_FROM_UPDATES;
+    case "no_reply":
+      return process.env.EMAIL_FROM_NOREPLY;
+  }
+}
+
+export function getEmailSenderForCategory(category: EmailSenderCategory) {
+  const explicit = explicitSenderForCategory(category);
+  if (explicit) {
+    return explicit;
+  }
+
+  const emailFrom = process.env.EMAIL_FROM;
+  const parsedDefault = parseEmailSender(emailFrom);
+  if (!parsedDefault) {
+    return emailFrom ?? "";
+  }
+
+  return formatEmailSender(
+    senderDisplayNameForCategory(category),
+    `${senderLocalPartForCategory(category)}@${parsedDefault.domain}`
+  );
 }
 
 function getResendClient() {
+  const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
     throw new Error("RESEND_API_KEY is not configured");
   }
@@ -82,6 +227,8 @@ function getResendClient() {
 }
 
 function getTwilioClient() {
+  const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+  const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
   if (!twilioAccountSid || !twilioAuthToken) {
     throw new Error("Twilio SMS is not configured");
   }
@@ -134,10 +281,16 @@ async function sendEmailNotification(input: EmailInput) {
     return;
   }
 
+  const category = input.category ?? "no_reply";
+  const from = input.fromOverride || getEmailSenderForCategory(category);
+  const parsedSender = parseEmailSender(from);
+  const emailReplyTo =
+    input.replyToOverride ?? (category === "no_reply" ? undefined : parsedSender?.address || process.env.EMAIL_REPLY_TO || undefined);
+
   await getResendClient().emails.send({
-    from: emailFrom!,
+    from,
     to: [recipient],
-    replyTo: emailReplyTo || undefined,
+    replyTo: emailReplyTo,
     subject: input.subject,
     html: input.html,
     text: input.text
@@ -164,6 +317,8 @@ async function sendSmsNotification(input: SmsInput) {
   if (await hasNotificationDelivery(input.eventKey)) {
     return;
   }
+
+  const twilioFromNumber = process.env.TWILIO_FROM_NUMBER;
 
   await getTwilioClient().messages.create({
     from: twilioFromNumber!,
@@ -353,6 +508,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
     eventKey: `purchase:${context.order.id}:buyer_email`,
     eventType: "purchase_confirmation",
     to: context.buyer.email,
+    category: "buyer_orders",
     ...buyerEmail
   });
 
@@ -361,6 +517,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
     eventKey: `purchase:${context.order.id}:seller_email`,
     eventType: "seller_order_alert",
     to: context.seller.email,
+    category: "seller_orders",
     ...sellerEmail
   });
 }
@@ -371,6 +528,7 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
     eventKey: `shipment:${context.order.id}:buyer_email`,
     eventType: "shipment_update",
     to: context.buyer.email,
+    category: "buyer_orders",
     ...buyerEmail
   });
 
@@ -390,6 +548,7 @@ export async function sendDirectMessageNotification(context: DirectMessageNotifi
     eventKey: `dm:${context.messageId}:email`,
     eventType: "direct_message",
     to: context.recipient.email,
+    category: "messages",
     ...recipientEmail
   });
 }
@@ -400,6 +559,7 @@ export async function sendNewListingFollowerNotification(context: NewListingNoti
     eventKey: `listing:${context.listing.id}:follower:${context.recipient.id}:email`,
     eventType: "new_listing",
     to: context.recipient.email,
+    category: "alerts",
     ...email
   });
 }
@@ -410,6 +570,7 @@ export async function sendEmailVerificationNotification(context: AccountEmailVer
     eventKey: `email-verification:${context.user.id}:${context.user.email}`,
     eventType: "email_verification",
     to: context.user.email,
+    category: "no_reply",
     ...email
   });
 }
@@ -420,7 +581,36 @@ export async function sendPasswordResetNotification(context: PasswordResetNotifi
     eventKey: `password-reset:${context.user.id}:${context.user.email}`,
     eventType: "password_reset",
     to: context.user.email,
+    category: "no_reply",
     ...email
+  });
+}
+
+export async function sendSenderTestNotification(input: { to: string; category: EmailSenderCategory }) {
+  const sender = getEmailSenderForCategory(input.category);
+  const parsedSender = parseEmailSender(sender);
+  const senderAddress = parsedSender?.address ?? sender;
+  const senderLabel = parsedSender?.name ? `${parsedSender.name} <${parsedSender.address}>` : senderAddress;
+  const replyBehavior =
+    input.category === "no_reply"
+      ? "This sender is configured without a reply-to address."
+      : `Replies should go back to ${senderAddress}.`;
+
+  await sendEmailNotification({
+    eventKey: `sender-test:${input.category}:${input.to}:${Date.now()}`,
+    eventType: "sender_test",
+    to: input.to,
+    category: input.category,
+    subject: `TailorGraph sender test: ${senderAddress}`,
+    text: `This is a TailorGraph sender test.\n\nCategory: ${input.category}\nFrom: ${senderLabel}\n${replyBehavior}`,
+    html: `
+      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
+        <h1 style="font-size:28px;margin:0 0 16px">TailorGraph sender test</h1>
+        <p style="margin:0 0 8px"><strong>Category:</strong> ${escapeHtml(input.category)}</p>
+        <p style="margin:0 0 8px"><strong>From:</strong> ${escapeHtml(senderLabel)}</p>
+        <p style="margin:0">${escapeHtml(replyBehavior)}</p>
+      </div>
+    `
   });
 }
 

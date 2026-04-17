@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getEstimatedArrivalLabel, normalizeSmsNumber } from "./notifications";
+import { getEmailSenderForCategory, getEstimatedArrivalLabel, normalizeSmsNumber } from "./notifications";
 import type { Listing, Order } from "./types";
 
 function buildOrder(overrides: Partial<Order> = {}): Order {
@@ -115,6 +115,21 @@ test("normalizeSmsNumber converts common US formats to E.164", () => {
 
 test("normalizeSmsNumber rejects malformed values", () => {
   assert.equal(normalizeSmsNumber("555-123"), null);
+});
+
+test("email sender categories derive the expected local parts from the default domain", () => {
+  process.env.EMAIL_FROM = "TailorGraph <noreply@mail.tailorgraph.com>";
+
+  assert.equal(
+    getEmailSenderForCategory("buyer_orders"),
+    "TailorGraph Buyer Orders <buyer-orders@mail.tailorgraph.com>"
+  );
+  assert.equal(
+    getEmailSenderForCategory("seller_orders"),
+    "TailorGraph Seller Orders <seller-orders@mail.tailorgraph.com>"
+  );
+  assert.equal(getEmailSenderForCategory("messages"), "TailorGraph Messages <messages@mail.tailorgraph.com>");
+  assert.equal(getEmailSenderForCategory("no_reply"), "TailorGraph <noreply@mail.tailorgraph.com>");
 });
 
 test("getEstimatedArrivalLabel reflects processing days plus transit window", () => {

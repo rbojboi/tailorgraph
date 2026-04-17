@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { addToCart, clearCart, getCartIds, removeFromCart } from "@/lib/cart";
+import { isAdminUser } from "@/lib/admin";
 import {
   clearSession,
   createSession,
@@ -76,11 +77,13 @@ import {
 } from "@/lib/store";
 import { saveListingMediaFiles } from "@/lib/media";
 import {
+  EMAIL_SENDER_TEST_CATEGORIES,
   sendDirectMessageNotification,
   sendEmailVerificationNotification,
   sendNewListingFollowerNotification,
   sendOrderShippedNotifications,
-  sendPasswordResetNotification
+  sendPasswordResetNotification,
+  sendSenderTestNotification
 } from "@/lib/notifications";
 import { purchaseShippoLabel, purchaseShippoLabelForRate } from "@/lib/shippo";
 import { estimateShippingCost, estimateTailoringDistanceFromSellerLocation } from "@/lib/shipping";
@@ -4187,4 +4190,33 @@ export async function updateSavedSearchQueryAction(formData: FormData) {
   revalidatePath("/buyer");
   const returnTo = serialized ? `/?savedSearchId=${savedSearchId}&${serialized}` : `/?savedSearchId=${savedSearchId}`;
   redirect(returnTo);
+}
+
+export async function sendSenderEmailTestsAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/admin?emailTestError=Add+DATABASE_URL+to+send+email+tests");
+  const user = await getCurrentUser();
+
+  if (!isAdminUser(user)) {
+    redirect("/?authError=Admin+access+required");
+  }
+
+  const username = stringValue(formData, "username") || "bobbyveebee";
+  const recipient = await findUserByUsername(username);
+
+  if (!recipient?.email) {
+    redirect(`/admin?emailTestError=${encodeURIComponent(`Could not find an email for @${username}.`)}`);
+  }
+
+  for (const category of EMAIL_SENDER_TEST_CATEGORIES) {
+    await sendSenderTestNotification({
+      to: recipient.email,
+      category
+    });
+  }
+
+  redirect(
+    `/admin?emailTestSent=${encodeURIComponent(
+      `Sent ${EMAIL_SENDER_TEST_CATEGORIES.length} sender tests to @${username}.`
+    )}`
+  );
 }

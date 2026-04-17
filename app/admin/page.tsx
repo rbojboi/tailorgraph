@@ -1,14 +1,28 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { sendSenderEmailTestsAction } from "@/app/actions";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
 import { ensureSeedData, listAllOrders, listMarketplace, listUsers } from "@/lib/store";
 import type { Listing, Order, User } from "@/lib/types";
 
-export default async function AdminPage() {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function firstValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function AdminPage({
+  searchParams
+}: {
+  searchParams: SearchParams;
+}) {
   await ensureSeedData();
   const user = await getCurrentUser();
+  const params = await searchParams;
+  const emailTestSent = firstValue(params.emailTestSent);
+  const emailTestError = firstValue(params.emailTestError);
 
   if (!isAdminUser(user)) {
     redirect("/?authError=Admin+access+required");
@@ -38,6 +52,41 @@ export default async function AdminPage() {
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Listings" value={String(listings.length)} /></article>
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Active listings" value={String(activeListings)} /></article>
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Paid orders" value={String(paidOrders)} /></article>
+        </section>
+
+        <section className="panel rounded-[1.75rem] p-6">
+          <SectionTitle
+            eyebrow="Email"
+            title="Sender identity tests"
+            description="Send one test email from each TailorGraph sender category to a saved account email. This uses the live Resend configuration."
+          />
+          {emailTestSent ? (
+            <p className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              {emailTestSent}
+            </p>
+          ) : null}
+          {emailTestError ? (
+            <p className="mt-4 rounded-[1.25rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+              {emailTestError}
+            </p>
+          ) : null}
+          <form action={sendSenderEmailTestsAction} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="flex-1">
+              <span className="text-sm font-medium text-stone-700">Username</span>
+              <input
+                name="username"
+                type="text"
+                defaultValue="bobbyveebee"
+                className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
+              />
+            </label>
+            <button
+              type="submit"
+              className="rounded-full border border-stone-900 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-stone-950 hover:text-white"
+            >
+              Send Sender Tests
+            </button>
+          </form>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
