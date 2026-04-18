@@ -21,6 +21,7 @@ import {
   createEmailVerificationToken,
   createPasswordResetToken,
   createSavedSearch,
+  createSupportRequest,
   createUser,
   clearPasswordResetTokensForUser,
   clearEmailVerificationTokensForUser,
@@ -83,7 +84,9 @@ import {
   sendNewListingFollowerNotification,
   sendOrderShippedNotifications,
   sendPasswordResetNotification,
-  sendSenderTestNotification
+  sendSenderTestNotification,
+  sendSupportRequestNotifications,
+  sendWelcomeNotification
 } from "@/lib/notifications";
 import { purchaseShippoLabel, purchaseShippoLabelForRate } from "@/lib/shippo";
 import { estimateShippingCost, estimateTailoringDistanceFromSellerLocation } from "@/lib/shipping";
@@ -112,6 +115,7 @@ import type {
   Role,
   ShirtSpecs,
   ShippingAddress,
+  SupportRequestTopic,
   SweaterSpecs,
   TrouserMeasurements,
   TrouserSpecs,
@@ -122,6 +126,20 @@ import type {
 function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
+
+const supportRequestTopics: SupportRequestTopic[] = [
+  "account_access",
+  "buying",
+  "selling",
+  "shipping_returns",
+  "fit_measurements",
+  "trust_safety",
+  "order_dispute",
+  "damaged_return",
+  "shipping_problem",
+  "scam_report",
+  "other"
+];
 
 function numberValue(formData: FormData, key: string) {
   return Number(formData.get(key) || 0);
@@ -1150,6 +1168,9 @@ export async function signUpAction(formData: FormData) {
   await sendEmailVerificationNotification({
     user,
     verificationUrl
+  });
+  await sendWelcomeNotification({
+    user
   });
 
   await createSession(user.id);
@@ -3655,8 +3676,25 @@ export async function openIssueAction(formData: FormData) {
   }
 
   await updateOrderIssue(orderId, "issue_open", reason || "Issue reported", null);
+  const supportRequest = await createSupportRequest({
+    userId: user.id,
+    requesterName: user.name,
+    requesterEmail: user.email,
+    requesterRole: user.role,
+    kind: "dispute",
+    topic: "order_dispute",
+    subject: reason || `Issue reported for order ${orderId}`,
+    message: reason || `Issue reported for order ${orderId}.`,
+    orderId,
+    listingId: order.listingId
+  });
+  await sendSupportRequestNotifications({
+    request: supportRequest
+  });
   revalidatePath("/buyer");
   revalidatePath("/seller");
+  revalidatePath("/admin");
+  revalidatePath("/support");
   redirect(returnTo || `/${order.buyerId === user.id ? "buyer" : "seller"}?saved=issue`);
 }
 
@@ -4190,6 +4228,64 @@ export async function updateSavedSearchQueryAction(formData: FormData) {
   revalidatePath("/buyer");
   const returnTo = serialized ? `/?savedSearchId=${savedSearchId}&${serialized}` : `/?savedSearchId=${savedSearchId}`;
   redirect(returnTo);
+}
+
+export async function submitSupportRequestAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/support?authError=Add+DATABASE_URL+to+contact+support");
+  const user = await getCurrentUser();
+  const kind = stringValue(formData, "kind") === "dispute" ? "dispute" : "support";
+  const topicCandidate = stringValue(formData, "topic") as SupportRequestTopic;
+  const topic = supportRequestTopics.includes(topicCandidate) ? topicCandidate : "other";
+  const subject = stringValue(formData, "subject");
+  const message = stringValue(formData, "message");
+  const orderId = stringValue(formData, "orderId") || null;
+  const listingId = stringValue(formData, "listingId") || null;
+  const guestName = stringValue(formData, "name");
+  const guestEmail = stringValue(formData, "email").toLowerCase();
+
+  const requesterName = user?.name || guestName;
+  const requesterEmail = user?.email || guestEmail;
+  const requesterRole = user?.role || "guest";
+
+  if (!requesterName || !requesterEmail || !subject || !message) {
+    redirect(
+      `/support?authError=${encodeURIComponent(
+        "Please complete your name, email, subject, and message before submitting."
+      )}`
+    );
+  }
+
+  if (kind === "dispute" && orderId) {
+    const linkedOrder = await findOrderById(orderId);
+    if (!linkedOrder || (user && linkedOrder.buyerId !== user.id && linkedOrder.sellerId !== user.id)) {
+      redirect("/support?authError=We+could+not+verify+that+order+for+your+account");
+    }
+
+    await updateOrderIssue(orderId, "issue_open", subject, linkedOrder.sellerNotes);
+    revalidatePath("/buyer");
+    revalidatePath("/seller");
+  }
+
+  const request = await createSupportRequest({
+    userId: user?.id ?? null,
+    requesterName,
+    requesterEmail,
+    requesterRole,
+    kind,
+    topic,
+    subject,
+    message,
+    orderId,
+    listingId
+  });
+
+  await sendSupportRequestNotifications({
+    request
+  });
+
+  revalidatePath("/support");
+  revalidatePath("/admin");
+  redirect(`/support?saved=${kind === "dispute" ? "dispute-received" : "support-received"}`);
 }
 
 export async function sendSenderEmailTestsAction(formData: FormData) {

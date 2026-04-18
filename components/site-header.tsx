@@ -18,6 +18,7 @@ export async function SiteHeader() {
   const navItems = [
     { href: "/marketplace", label: "Marketplace", accent: true },
     { href: "/how-to-use", label: "How to Use" },
+    { href: "/support", label: "Support" },
     { href: "/messages", label: "Messages", icon: true }
   ];
 

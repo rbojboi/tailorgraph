@@ -66,7 +66,7 @@ export function BuyerListingCard({
         <form action={addToCartAction}>
           <input type="hidden" name="listingId" value={listing.id} />
           <input type="hidden" name="returnTo" value={returnTo} />
-          <button className="h-11 w-full rounded-full border border-stone-300 bg-white px-2 text-center text-[13px] font-semibold leading-tight text-stone-800">
+          <button className="h-11 w-full rounded-full border border-stone-300 bg-white px-2 text-center text-[12px] font-semibold leading-none text-stone-800">
             Add to Cart
           </button>
         </form>

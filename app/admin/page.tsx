@@ -4,8 +4,9 @@ import { sendSenderEmailTestsAction } from "@/app/actions";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
-import { ensureSeedData, listAllOrders, listMarketplace, listUsers } from "@/lib/store";
-import type { Listing, Order, User } from "@/lib/types";
+import { formatDisplayValue } from "@/lib/display";
+import { ensureSeedData, listAllOrders, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
+import type { Listing, Order, SupportRequest, User } from "@/lib/types";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -31,6 +32,7 @@ export default async function AdminPage({
   const users = await listUsers();
   const orders = await listAllOrders();
   const listings = await listMarketplace();
+  const supportRequests = await listSupportRequests(12);
   const activeListings = listings.filter((listing: Listing) => listing.status === "active").length;
   const soldListings = listings.filter((listing: Listing) => listing.status === "sold").length;
   const paidOrders = orders.filter((order: Order) => order.status === "paid").length;
@@ -145,6 +147,42 @@ export default async function AdminPage({
               <p className="mt-2 text-sm text-stone-700">Active: {activeListings} | Sold: {soldListings}</p>
             </div>
           </article>
+        </section>
+
+        <section className="panel rounded-[1.75rem] p-6">
+          <SectionTitle
+            eyebrow="Support"
+            title="Recent support and dispute requests"
+            description="A quick operational view into what customers are asking for help with right now."
+          />
+          <div className="mt-5 grid gap-4">
+            {supportRequests.length ? (
+              supportRequests.map((request: SupportRequest) => (
+                <article key={request.id} className="rounded-[1.5rem] border border-stone-300 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-stone-950">{request.subject}</h2>
+                      <p className="mt-1 text-sm text-stone-700">
+                        {request.requesterName} · {request.requesterEmail}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-800">{request.status}</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                    <Spec label="Kind" value={formatDisplayValue(request.kind)} />
+                    <Spec label="Topic" value={formatDisplayValue(request.topic)} />
+                    <Spec label="Order ID" value={request.orderId || "None"} />
+                    <Spec label="Created" value={new Date(request.createdAt).toLocaleDateString("en-US")} />
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-stone-700">{request.message}</p>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-[1.5rem] border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-600">
+                No support requests yet.
+              </div>
+            )}
+          </div>
         </section>
       </PageWrap>
     </AppShell>

@@ -207,6 +207,23 @@ export type OrderStatus =
 
 export type OfferStatus = "active" | "accepted" | "rejected";
 
+export type SupportRequestKind = "support" | "dispute";
+
+export type SupportRequestTopic =
+  | "account_access"
+  | "buying"
+  | "selling"
+  | "shipping_returns"
+  | "fit_measurements"
+  | "trust_safety"
+  | "order_dispute"
+  | "damaged_return"
+  | "shipping_problem"
+  | "scam_report"
+  | "other";
+
+export type SupportRequestStatus = "open" | "reviewing" | "resolved";
+
 export type Listing = {
   id: string;
   sellerId: string;
@@ -548,4 +565,21 @@ export type SavedSearch = {
   name: string;
   queryString: string;
   createdAt: string;
+};
+
+export type SupportRequest = {
+  id: string;
+  userId: string | null;
+  requesterName: string;
+  requesterEmail: string;
+  requesterRole: Role | "guest";
+  kind: SupportRequestKind;
+  topic: SupportRequestTopic;
+  subject: string;
+  message: string;
+  orderId: string | null;
+  listingId: string | null;
+  status: SupportRequestStatus;
+  createdAt: string;
+  resolvedAt: string | null;
 };

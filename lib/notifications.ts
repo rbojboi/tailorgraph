@@ -1,8 +1,9 @@
 import { Resend } from "resend";
 import twilio from "twilio";
+import { getAdminEmails } from "@/lib/admin";
 import { getAppUrl } from "@/lib/stripe";
 import { hasNotificationDelivery, recordNotificationDelivery } from "@/lib/store";
-import type { Listing, MessageThread, Order, User } from "@/lib/types";
+import type { Listing, MessageThread, Order, SupportRequest, User } from "@/lib/types";
 
 let resendClient: Resend | null = null;
 let twilioClient: ReturnType<typeof twilio> | null = null;
@@ -55,6 +56,14 @@ type AccountEmailVerificationContext = {
 type PasswordResetNotificationContext = {
   user: User;
   resetUrl: string;
+};
+
+type WelcomeNotificationContext = {
+  user: User;
+};
+
+type SupportRequestNotificationContext = {
+  request: SupportRequest;
 };
 
 export type EmailSenderCategory =
@@ -502,6 +511,65 @@ function passwordResetEmail(context: PasswordResetNotificationContext) {
   };
 }
 
+function welcomeEmail(context: WelcomeNotificationContext) {
+  const measurementsUrl = `${getAppUrl()}/buyer/measurements`;
+  const marketplaceUrl = `${getAppUrl()}/marketplace`;
+  const supportUrl = `${getAppUrl()}/support`;
+
+  return {
+    subject: "Welcome to TailorGraph",
+    text: `Welcome to TailorGraph.\n\nStart with your measurements: ${measurementsUrl}\nBrowse the marketplace: ${marketplaceUrl}\nNeed help? Visit Support: ${supportUrl}`,
+    html: `
+      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
+        <h1 style="font-size:28px;margin:0 0 16px">Welcome to TailorGraph</h1>
+        <p style="margin:0 0 12px">Your account is ready. The best next step is saving the measurements that fit you well.</p>
+        <p style="margin:0 0 12px"><a href="${measurementsUrl}">Start with your measurements</a></p>
+        <p style="margin:0 0 12px"><a href="${marketplaceUrl}">Browse the marketplace</a></p>
+        <p style="margin:0"><a href="${supportUrl}">Visit Support</a> if you need help getting started.</p>
+      </div>
+    `
+  };
+}
+
+function supportRequestConfirmationEmail(context: SupportRequestNotificationContext) {
+  const supportUrl = `${getAppUrl()}/support`;
+  return {
+    subject: `TailorGraph support request received: ${context.request.subject}`,
+    text: `We received your TailorGraph ${context.request.kind} request.\n\nSubject: ${context.request.subject}\nTopic: ${context.request.topic}\n\nWe’re looking into it and will follow up as needed. You can revisit support here: ${supportUrl}`,
+    html: `
+      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
+        <h1 style="font-size:28px;margin:0 0 16px">We received your request</h1>
+        <p style="margin:0 0 8px"><strong>Subject:</strong> ${escapeHtml(context.request.subject)}</p>
+        <p style="margin:0 0 16px"><strong>Topic:</strong> ${escapeHtml(context.request.topic)}</p>
+        <p style="margin:0 0 16px">We’re looking into it and will follow up as needed.</p>
+        <p style="margin:0"><a href="${supportUrl}">Return to Support</a></p>
+      </div>
+    `
+  };
+}
+
+function supportRequestInternalEmail(context: SupportRequestNotificationContext) {
+  const request = context.request;
+  const subject = request.kind === "dispute" ? "New dispute report submitted" : "New support request submitted";
+
+  return {
+    subject: `TailorGraph ${subject.toLowerCase()}: ${request.subject}`,
+    text: `${subject}\n\nRequester: ${request.requesterName} <${request.requesterEmail}>\nRole: ${request.requesterRole}\nKind: ${request.kind}\nTopic: ${request.topic}\nOrder ID: ${request.orderId || "None"}\nListing ID: ${request.listingId || "None"}\n\n${request.message}`,
+    html: `
+      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
+        <h1 style="font-size:28px;margin:0 0 16px">${escapeHtml(subject)}</h1>
+        <p style="margin:0 0 8px"><strong>Requester:</strong> ${escapeHtml(request.requesterName)} &lt;${escapeHtml(request.requesterEmail)}&gt;</p>
+        <p style="margin:0 0 8px"><strong>Role:</strong> ${escapeHtml(request.requesterRole)}</p>
+        <p style="margin:0 0 8px"><strong>Kind:</strong> ${escapeHtml(request.kind)}</p>
+        <p style="margin:0 0 8px"><strong>Topic:</strong> ${escapeHtml(request.topic)}</p>
+        <p style="margin:0 0 8px"><strong>Order ID:</strong> ${escapeHtml(request.orderId || "None")}</p>
+        <p style="margin:0 0 16px"><strong>Listing ID:</strong> ${escapeHtml(request.listingId || "None")}</p>
+        <p style="margin:0;white-space:pre-wrap">${escapeHtml(request.message)}</p>
+      </div>
+    `
+  };
+}
+
 export async function sendOrderPurchasedNotifications(context: OrderNotificationContext) {
   const buyerEmail = purchaseBuyerEmail(context);
   await sendEmailNotification({
@@ -584,6 +652,44 @@ export async function sendPasswordResetNotification(context: PasswordResetNotifi
     category: "no_reply",
     ...email
   });
+}
+
+export async function sendWelcomeNotification(context: WelcomeNotificationContext) {
+  const email = welcomeEmail(context);
+  await sendEmailNotification({
+    eventKey: `welcome:${context.user.id}:${context.user.email}`,
+    eventType: "welcome",
+    to: context.user.email,
+    category: "hello",
+    ...email
+  });
+}
+
+export async function sendSupportRequestNotifications(context: SupportRequestNotificationContext) {
+  const confirmation = supportRequestConfirmationEmail(context);
+  await sendEmailNotification({
+    eventKey: `support-request:${context.request.id}:requester`,
+    eventType: "support_request_confirmation",
+    to: context.request.requesterEmail,
+    category: "support",
+    ...confirmation
+  });
+
+  const adminRecipients = getAdminEmails();
+  if (!adminRecipients.length) {
+    return;
+  }
+
+  const internal = supportRequestInternalEmail(context);
+  for (const adminEmail of adminRecipients) {
+    await sendEmailNotification({
+      eventKey: `support-request:${context.request.id}:admin:${adminEmail}`,
+      eventType: "support_request_alert",
+      to: adminEmail,
+      category: "support",
+      ...internal
+    });
+  }
 }
 
 export async function sendSenderTestNotification(input: { to: string; category: EmailSenderCategory }) {

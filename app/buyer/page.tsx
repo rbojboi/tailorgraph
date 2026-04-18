@@ -546,7 +546,7 @@ export default async function BuyerPage({
                         <form action={addToCartAction}>
                           <input type="hidden" name="listingId" value={listing.id} />
                           <input type="hidden" name="returnTo" value="/buyer" />
-                          <button className="h-11 w-full rounded-full border border-stone-400 bg-stone-200 px-2 text-center text-[13px] font-semibold leading-tight text-stone-900">
+                          <button className="h-11 w-full rounded-full border border-stone-400 bg-stone-200 px-2 text-center text-[12px] font-semibold leading-none text-stone-900">
                             Add to Cart
                           </button>
                         </form>
@@ -643,7 +643,7 @@ export default async function BuyerPage({
                           <form action={addToCartAction}>
                             <input type="hidden" name="listingId" value={listing.id} />
                             <input type="hidden" name="returnTo" value="/buyer" />
-                            <button className="h-11 w-full rounded-full border border-stone-400 bg-stone-200 px-2 text-center text-[13px] font-semibold leading-tight text-stone-900">
+                            <button className="h-11 w-full rounded-full border border-stone-400 bg-stone-200 px-2 text-center text-[12px] font-semibold leading-none text-stone-900">
                               Add to Cart
                             </button>
                           </form>

@@ -20,6 +20,10 @@ import type {
   SellerReviewScores,
   ShirtSpecs,
   ShippingAddress,
+  SupportRequest,
+  SupportRequestKind,
+  SupportRequestStatus,
+  SupportRequestTopic,
   SweaterSpecs,
   TrouserMeasurements,
   TrouserSpecs,
@@ -65,7 +69,7 @@ const defaultBuyerProfile: BuyerProfile = {
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 29;
+const SCHEMA_VERSION = 30;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -415,6 +419,23 @@ async function initSchema() {
       channel TEXT NOT NULL,
       recipient TEXT NOT NULL,
       event_type TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS support_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      requester_name TEXT NOT NULL,
+      requester_email TEXT NOT NULL,
+      requester_role TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      topic TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      order_id TEXT REFERENCES orders(id) ON DELETE SET NULL,
+      listing_id TEXT REFERENCES listings(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      resolved_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -946,6 +967,25 @@ function mapSavedSearch(row: Record<string, unknown>): SavedSearch {
     name: String(row.name),
     queryString: String(row.query_string),
     createdAt: new Date(String(row.created_at)).toISOString()
+  };
+}
+
+function mapSupportRequest(row: Record<string, unknown>): SupportRequest {
+  return {
+    id: String(row.id),
+    userId: row.user_id ? String(row.user_id) : null,
+    requesterName: String(row.requester_name ?? ""),
+    requesterEmail: String(row.requester_email ?? ""),
+    requesterRole: (String(row.requester_role ?? "guest") as SupportRequest["requesterRole"]),
+    kind: String(row.kind) as SupportRequestKind,
+    topic: String(row.topic) as SupportRequestTopic,
+    subject: String(row.subject ?? ""),
+    message: String(row.message ?? ""),
+    orderId: row.order_id ? String(row.order_id) : null,
+    listingId: row.listing_id ? String(row.listing_id) : null,
+    status: String(row.status ?? "open") as SupportRequestStatus,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    resolvedAt: row.resolved_at ? new Date(String(row.resolved_at)).toISOString() : null
   };
 }
 
@@ -3252,6 +3292,60 @@ export async function deleteSavedSearch(userId: string, savedSearchId: string): 
     "DELETE FROM user_saved_searches WHERE id = $1 AND user_id = $2",
     [savedSearchId, userId]
   );
+}
+
+export async function createSupportRequest(input: {
+  userId: string | null;
+  requesterName: string;
+  requesterEmail: string;
+  requesterRole: SupportRequest["requesterRole"];
+  kind: SupportRequestKind;
+  topic: SupportRequestTopic;
+  subject: string;
+  message: string;
+  orderId?: string | null;
+  listingId?: string | null;
+}): Promise<SupportRequest> {
+  await ensureSchema();
+  const id = randomUUID();
+  const result = await requirePool().query(
+    `INSERT INTO support_requests (
+       id, user_id, requester_name, requester_email, requester_role, kind, topic, subject, message, order_id, listing_id, status, created_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'open', NOW())
+     RETURNING *`,
+    [
+      id,
+      input.userId,
+      input.requesterName,
+      input.requesterEmail.toLowerCase(),
+      input.requesterRole,
+      input.kind,
+      input.topic,
+      input.subject,
+      input.message,
+      input.orderId ?? null,
+      input.listingId ?? null
+    ]
+  );
+
+  return mapSupportRequest(result.rows[0]);
+}
+
+export async function listSupportRequests(limit = 50): Promise<SupportRequest[]> {
+  if (!databaseConfigured) {
+    return [];
+  }
+
+  await ensureSchema();
+  const result = await requirePool().query(
+    `SELECT *
+     FROM support_requests
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return result.rows.map(mapSupportRequest);
 }
 
 export function isDatabaseConfigured() {
