@@ -75,6 +75,19 @@ export type BuyerProfile = {
   suggestedMeasurementRanges: BuyerSuggestedMeasurementRanges | null;
 };
 
+export type NotificationPreferences = {
+  messagesEmail: boolean;
+  fitEmail: boolean;
+  savedSearchEmail: boolean;
+  savedSellerEmail: boolean;
+  savedItemEmail: boolean;
+  offerAndPriceDropEmail: boolean;
+  sellerActivityEmail: boolean;
+  helloEmail: boolean;
+  updatesEmail: boolean;
+  shipmentSms: boolean;
+};
+
 export type User = {
   id: string;
   name: string;
@@ -94,6 +107,7 @@ export type User = {
   marketplaceIntroDismissed: boolean;
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
+  notificationPreferences: NotificationPreferences;
   buyerProfile: BuyerProfile;
   createdAt: string;
 };

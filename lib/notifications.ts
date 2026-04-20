@@ -276,6 +276,13 @@ export function normalizeSmsNumber(value: string) {
   return null;
 }
 
+function shouldSendOptionalEmail(
+  user: Pick<User, "notificationPreferences">,
+  preferenceKey: keyof User["notificationPreferences"]
+) {
+  return Boolean(user.notificationPreferences[preferenceKey]);
+}
+
 async function sendEmailNotification(input: EmailInput) {
   if (!isEmailNotificationConfigured()) {
     return;
@@ -600,7 +607,7 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
     ...buyerEmail
   });
 
-  if (context.buyer.phoneNumber) {
+  if (context.buyer.phoneNumber && context.buyer.notificationPreferences.shipmentSms) {
     await sendSmsNotification({
       eventKey: `shipment:${context.order.id}:buyer_sms`,
       eventType: "shipment_sms",
@@ -611,6 +618,10 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
 }
 
 export async function sendDirectMessageNotification(context: DirectMessageNotificationContext) {
+  if (!shouldSendOptionalEmail(context.recipient, "messagesEmail")) {
+    return;
+  }
+
   const recipientEmail = directMessageEmail(context);
   await sendEmailNotification({
     eventKey: `dm:${context.messageId}:email`,
@@ -622,6 +633,10 @@ export async function sendDirectMessageNotification(context: DirectMessageNotifi
 }
 
 export async function sendNewListingFollowerNotification(context: NewListingNotificationContext) {
+  if (!shouldSendOptionalEmail(context.recipient, "savedSellerEmail")) {
+    return;
+  }
+
   const email = newListingFollowerEmail(context);
   await sendEmailNotification({
     eventKey: `listing:${context.listing.id}:follower:${context.recipient.id}:email`,
@@ -655,6 +670,10 @@ export async function sendPasswordResetNotification(context: PasswordResetNotifi
 }
 
 export async function sendWelcomeNotification(context: WelcomeNotificationContext) {
+  if (!shouldSendOptionalEmail(context.user, "helloEmail")) {
+    return;
+  }
+
   const email = welcomeEmail(context);
   await sendEmailNotification({
     eventKey: `welcome:${context.user.id}:${context.user.email}`,

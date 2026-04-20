@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { randomUUID } from "node:crypto";
+import { put } from "@vercel/blob";
 import type { ListingMedia } from "@/lib/types";
 
 const allowedMimeTypes = new Set([
@@ -13,6 +14,10 @@ const allowedMimeTypes = new Set([
 
 function safeName(name: string) {
   return name.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function isBlobStorageConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
 export async function saveListingMediaFiles(
@@ -47,12 +52,24 @@ export async function saveListingMediaFiles(
             ? ".heif"
             : ".jpg");
     const filename = `${randomUUID()}-${safeName(file.name || `upload${extension}`)}`;
-    const outputPath = `${targetDir}/${filename}`;
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await writeFile(outputPath, buffer);
+    let url: string;
+
+    if (isBlobStorageConfigured()) {
+      const blob = await put(`listings/${sellerId}/${filename}`, file, {
+        access: "public",
+        contentType: file.type || undefined,
+        addRandomSuffix: false
+      });
+      url = blob.url;
+    } else {
+      const outputPath = `${targetDir}/${filename}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await writeFile(outputPath, buffer);
+      url = `/uploads/listings/${sellerId}/${filename}`;
+    }
 
     media.push({
-      url: `/uploads/listings/${sellerId}/${filename}`,
+      url,
       kind: "image",
       originalName: file.name,
       mimeType: file.type

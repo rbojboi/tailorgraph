@@ -116,6 +116,12 @@ export function AccountMenu({ signedIn, username }: AccountMenuProps) {
                   >
                     Settings
                   </Link>
+                  <Link
+                    href="/account/notifications"
+                    className="block rounded-xl px-6 py-2 text-sm font-semibold text-stone-800 transition hover:bg-stone-100"
+                  >
+                    Notifications
+                  </Link>
                 </div>
 
                 <form action={logoutAction}>

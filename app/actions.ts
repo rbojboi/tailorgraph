@@ -69,6 +69,7 @@ import {
   updateOrderShipping,
   updateOrderShippingWithProvider,
   updateSellerLocation,
+  updateNotificationPreferences,
   updateUserEmail,
   updateUser,
   updateUsername,
@@ -2264,6 +2265,32 @@ export async function saveBuyerAccountAction(formData: FormData) {
   redirect("/account/personal?saved=account");
 }
 
+export async function updateNotificationPreferencesAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/account/notifications?authError=Add+DATABASE_URL+to+save+notification+preferences");
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login?authError=Please+log+in+to+manage+notification+preferences");
+  }
+
+  await updateNotificationPreferences(user.id, {
+    messagesEmail: formData.get("messagesEmail") === "on",
+    fitEmail: formData.get("fitEmail") === "on",
+    savedSearchEmail: formData.get("savedSearchEmail") === "on",
+    savedSellerEmail: formData.get("savedSellerEmail") === "on",
+    savedItemEmail: formData.get("savedItemEmail") === "on",
+    offerAndPriceDropEmail: formData.get("offerAndPriceDropEmail") === "on",
+    sellerActivityEmail: formData.get("sellerActivityEmail") === "on",
+    helloEmail: formData.get("helloEmail") === "on",
+    updatesEmail: formData.get("updatesEmail") === "on",
+    shipmentSms: formData.get("shipmentSms") === "on"
+  });
+
+  revalidatePath("/account");
+  revalidatePath("/account/notifications");
+  redirect("/account/notifications?saved=preferences");
+}
+
 export async function saveAccountPersonalFieldAction(formData: FormData) {
   redirectIfDatabaseUnavailable("/account/personal?authError=Add+DATABASE_URL+to+save+account");
   const user = await getCurrentUser();
@@ -3019,22 +3046,6 @@ export async function addToCartAction(formData: FormData) {
   if (user?.id && listing.sellerId === user.id) {
     const destination = returnTo || `/listings/${listing.id}`;
     redirect(withUpdatedQueryParam(destination, "authError", "You may not add your own item to your cart."));
-  }
-
-  const existingCartIds = await getCartIds();
-  const existingCartListings = (
-    await Promise.all(existingCartIds.filter((id) => id !== listingId).map((id) => findListingById(id)))
-  ).filter((cartListing): cartListing is NonNullable<typeof cartListing> => Boolean(cartListing));
-
-  if (existingCartListings.some((cartListing) => cartListing.status === "active" && cartListing.sellerId !== listing.sellerId)) {
-    const destination = returnTo || `/listings/${listing.id}`;
-    redirect(
-      withUpdatedQueryParam(
-        destination,
-        "authError",
-        "For now, checkout supports one seller at a time. Please check out or clear your current cart before adding this item."
-      )
-    );
   }
 
   const alreadyInCart = await addToCart(listingId);

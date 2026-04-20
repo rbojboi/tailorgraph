@@ -24,6 +24,11 @@ export default async function AccountPage() {
       description: "Update your username, login email, and password."
     },
     {
+      href: "/account/notifications",
+      title: "Notification Preferences",
+      description: "Choose which optional marketplace, fit, seller, and product alerts you want to receive."
+    },
+    {
       href: "/account/profile",
       title: "Profile Settings",
       description: "Control how your public profile appears across the marketplace."

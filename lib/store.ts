@@ -67,9 +67,22 @@ const defaultBuyerProfile: BuyerProfile = {
   suggestedMeasurementRanges: null
 };
 
+const defaultNotificationPreferences: User["notificationPreferences"] = {
+  messagesEmail: true,
+  fitEmail: true,
+  savedSearchEmail: false,
+  savedSellerEmail: false,
+  savedItemEmail: false,
+  offerAndPriceDropEmail: true,
+  sellerActivityEmail: true,
+  helloEmail: true,
+  updatesEmail: false,
+  shipmentSms: true
+};
+
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 30;
+const SCHEMA_VERSION = 31;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -104,6 +117,27 @@ function normalizeStoredSizeLabel(value: string) {
 
 function normalizeUsernameCandidate(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+}
+
+function normalizeNotificationPreferences(value: unknown): User["notificationPreferences"] {
+  const raw =
+    typeof value === "string"
+      ? (JSON.parse(value) as Partial<User["notificationPreferences"]>)
+      : ((value as Partial<User["notificationPreferences"]> | null) ?? {});
+
+  return {
+    messagesEmail: raw.messagesEmail ?? defaultNotificationPreferences.messagesEmail,
+    fitEmail: raw.fitEmail ?? defaultNotificationPreferences.fitEmail,
+    savedSearchEmail: raw.savedSearchEmail ?? defaultNotificationPreferences.savedSearchEmail,
+    savedSellerEmail: raw.savedSellerEmail ?? defaultNotificationPreferences.savedSellerEmail,
+    savedItemEmail: raw.savedItemEmail ?? defaultNotificationPreferences.savedItemEmail,
+    offerAndPriceDropEmail:
+      raw.offerAndPriceDropEmail ?? defaultNotificationPreferences.offerAndPriceDropEmail,
+    sellerActivityEmail: raw.sellerActivityEmail ?? defaultNotificationPreferences.sellerActivityEmail,
+    helloEmail: raw.helloEmail ?? defaultNotificationPreferences.helloEmail,
+    updatesEmail: raw.updatesEmail ?? defaultNotificationPreferences.updatesEmail,
+    shipmentSms: raw.shipmentSms ?? defaultNotificationPreferences.shipmentSms
+  };
 }
 
 async function generateAvailableUsername(baseValue: string, excludeUserId?: string) {
@@ -208,6 +242,7 @@ async function initSchema() {
       marketplace_intro_dismissed BOOLEAN NOT NULL DEFAULT FALSE,
       stripe_account_id TEXT,
       stripe_onboarding_complete BOOLEAN NOT NULL DEFAULT FALSE,
+      notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
@@ -459,6 +494,7 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS show_business_name_on_profile BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS public_location_mode TEXT NOT NULL DEFAULT 'country';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS marketplace_intro_dismissed BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_preferences JSONB NOT NULL DEFAULT '{}'::jsonb;
     ALTER TABLE buyer_profiles ADD COLUMN IF NOT EXISTS zip_code TEXT NOT NULL DEFAULT '';
     ALTER TABLE buyer_profiles ADD COLUMN IF NOT EXISTS location TEXT NOT NULL DEFAULT '';
     ALTER TABLE buyer_profiles ADD COLUMN IF NOT EXISTS address JSONB NOT NULL DEFAULT '{}'::jsonb;
@@ -638,6 +674,7 @@ function mapUser(row: Record<string, unknown>): User {
     typeof row.suggested_measurement_ranges === "string"
       ? (JSON.parse(row.suggested_measurement_ranges) as BuyerProfile["suggestedMeasurementRanges"])
       : (row.suggested_measurement_ranges as BuyerProfile["suggestedMeasurementRanges"]) ?? null;
+  const notificationPreferences = normalizeNotificationPreferences(row.notification_preferences);
 
   return {
     id: String(row.id),
@@ -658,6 +695,7 @@ function mapUser(row: Record<string, unknown>): User {
     marketplaceIntroDismissed: Boolean(row.marketplace_intro_dismissed),
     stripeAccountId: row.stripe_account_id ? String(row.stripe_account_id) : null,
     stripeOnboardingComplete: Boolean(row.stripe_onboarding_complete),
+    notificationPreferences,
     createdAt: new Date(String(row.created_at)).toISOString(),
     buyerProfile: {
       zipCode: String(row.zip_code ?? ""),
@@ -1400,10 +1438,23 @@ export async function createUser(input: {
   const id = randomUUID();
   const username = await generateAvailableUsername(input.username || input.name);
   const userResult = await client.query(
-    `INSERT INTO users (id, name, username, email, phone_number, password_hash, role, seller_zip_code, seller_location, stripe_account_id, stripe_onboarding_complete, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
+    `INSERT INTO users (id, name, username, email, phone_number, password_hash, role, seller_zip_code, seller_location, stripe_account_id, stripe_onboarding_complete, notification_preferences, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
      RETURNING *`,
-    [id, input.name, username, input.email.toLowerCase(), "", input.passwordHash, input.role, "", "", null, false]
+    [
+      id,
+      input.name,
+      username,
+      input.email.toLowerCase(),
+      "",
+      input.passwordHash,
+      input.role,
+      "",
+      "",
+      null,
+      false,
+      JSON.stringify(defaultNotificationPreferences)
+    ]
   );
 
   await client.query(
@@ -1451,6 +1502,7 @@ export async function createUser(input: {
     marketplaceIntroDismissed: false,
     stripeAccountId: null,
     stripeOnboardingComplete: false,
+    notificationPreferences: defaultNotificationPreferences,
     buyerProfile: defaultBuyerProfile,
     createdAt: new Date(String(userResult.rows[0].created_at)).toISOString()
   } satisfies User;
@@ -1614,6 +1666,17 @@ export async function updateUsername(userId: string, username: string): Promise<
 export async function updateUserEmail(userId: string, email: string): Promise<void> {
   await ensureSchema();
   await requirePool().query("UPDATE users SET email = $1, email_verified = FALSE WHERE id = $2", [email.toLowerCase(), userId]);
+}
+
+export async function updateNotificationPreferences(
+  userId: string,
+  notificationPreferences: User["notificationPreferences"]
+): Promise<void> {
+  await ensureSchema();
+  await requirePool().query("UPDATE users SET notification_preferences = $1 WHERE id = $2", [
+    JSON.stringify(notificationPreferences),
+    userId
+  ]);
 }
 
 export async function createPasswordResetToken(

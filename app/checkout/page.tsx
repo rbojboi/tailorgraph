@@ -55,6 +55,7 @@ export default async function CheckoutPage({
     redirect("/login?authError=Please+log+in+or+create+an+account+to+check+out");
   }
 
+  const requestedSellerId = firstValue(params.sellerId);
   const cartIds = await getCartIds();
   const marketplace = await listMarketplace();
   const cartListings = marketplace.filter((listing) => cartIds.includes(listing.id) && listing.status === "active");
@@ -63,12 +64,41 @@ export default async function CheckoutPage({
     redirect("/cart");
   }
 
-  if (new Set(cartListings.map((listing) => listing.sellerId)).size > 1) {
+  const sellerGroups = Array.from(
+    cartListings.reduce(
+      (groups, listing) => {
+        const current = groups.get(listing.sellerId);
+        if (current) {
+          current.push(listing);
+        } else {
+          groups.set(listing.sellerId, [listing]);
+        }
+        return groups;
+      },
+      new Map<string, typeof cartListings>()
+    )
+  );
+
+  const selectedSellerId =
+    requestedSellerId && sellerGroups.some(([sellerId]) => sellerId === requestedSellerId)
+      ? requestedSellerId
+      : sellerGroups.length === 1
+        ? sellerGroups[0][0]
+        : null;
+
+  if (!selectedSellerId) {
     redirect(
       `/cart?checkoutError=${encodeURIComponent(
-        "For now, checkout supports one seller at a time. Please remove items from other sellers and check out separately."
+        "Choose which seller group you want to check out first."
       )}`
     );
+  }
+
+  const selectedListings = cartListings.filter((listing) => listing.sellerId === selectedSellerId);
+  const selectedSellerName = selectedListings[0]?.sellerDisplayName || "Seller";
+
+  if (!selectedListings.length) {
+    redirect("/cart");
   }
 
   const savedAddresses =
@@ -78,8 +108,8 @@ export default async function CheckoutPage({
         ? [user.buyerProfile.address]
         : [];
 
-  const subtotal = cartListings.reduce((sum, listing) => sum + listing.price, 0);
-  const shippingTotal = cartListings.reduce((sum, listing) => sum + listing.shippingPrice, 0);
+  const subtotal = selectedListings.reduce((sum, listing) => sum + listing.price, 0);
+  const shippingTotal = selectedListings.reduce((sum, listing) => sum + listing.shippingPrice, 0);
   const total = subtotal + shippingTotal;
   const stripeEnabled = isStripeConfigured();
 
@@ -92,7 +122,7 @@ export default async function CheckoutPage({
               <p className="eyebrow text-xs text-stone-500">Checkout</p>
               <h1 className="mt-3 text-4xl font-semibold text-stone-950">Review and purchase</h1>
               <p className="mt-3 text-sm text-stone-700">
-                Confirm your shipping address and complete payment for the items in your cart.
+                You are checking out the items in your cart from <strong>@{selectedSellerName}</strong>.
               </p>
             </div>
             <Link
@@ -112,7 +142,7 @@ export default async function CheckoutPage({
 
         <section className="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
           <div className="grid gap-4">
-            {cartListings.map((listing) => {
+            {selectedListings.map((listing) => {
               const estimatedArrival = formatEstimatedArrivalRange(3, 7);
 
               return (
@@ -167,10 +197,12 @@ export default async function CheckoutPage({
           <aside className="panel rounded-[1.75rem] p-6">
             <p className="eyebrow text-xs text-stone-500">Order summary</p>
             <h2 className="mt-3 text-2xl font-semibold text-stone-950">Complete checkout</h2>
-            <p className="mt-2 text-sm text-stone-700">Signed in as {user.name}.</p>
+            <p className="mt-2 text-sm text-stone-700">
+              Signed in as {user.name}. Seller group: @{selectedSellerName}.
+            </p>
             <p className="mt-5 text-4xl font-semibold text-stone-950">{formatCurrency(total)}</p>
             <div className="mt-4 rounded-[1.5rem] bg-white p-4 text-sm text-stone-700">
-              <p>Items: {cartListings.length}</p>
+              <p>Items: {selectedListings.length}</p>
               <p className="mt-1">Subtotal: {formatCurrency(subtotal)}</p>
               <p className="mt-1">Shipping: {formatCurrency(shippingTotal)}</p>
             </div>
@@ -179,7 +211,7 @@ export default async function CheckoutPage({
               <p className="text-sm font-semibold text-stone-950">Shipping address</p>
               {stripeEnabled ? (
                 <form action={startCartStripeCheckoutAction}>
-                  {cartListings.map((listing) => (
+                  {selectedListings.map((listing) => (
                     <input key={listing.id} type="hidden" name="listingIds" value={listing.id} />
                   ))}
                   <CheckoutAddressFields savedAddresses={savedAddresses} defaultFullName={user.name || ""} />
@@ -193,6 +225,12 @@ export default async function CheckoutPage({
                 </div>
               )}
             </div>
+
+            {sellerGroups.length > 1 ? (
+              <p className="mt-4 rounded-[1.25rem] bg-stone-100 px-4 py-3 text-sm text-stone-700">
+                The rest of your cart stays intact. After this order, you can come back and check out another seller group.
+              </p>
+            ) : null}
           </aside>
         </section>
       </div>
