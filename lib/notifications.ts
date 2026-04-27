@@ -66,6 +66,27 @@ type SupportRequestNotificationContext = {
   request: SupportRequest;
 };
 
+type EmailAction = {
+  label: string;
+  url: string;
+};
+
+type EmailDetail = {
+  label: string;
+  value: string;
+};
+
+type EmailLayoutInput = {
+  eyebrow?: string;
+  title: string;
+  introParagraphs?: string[];
+  bodyHtml?: string;
+  details?: EmailDetail[];
+  primaryAction?: EmailAction;
+  secondaryAction?: EmailAction;
+  footerMessage?: string;
+};
+
 export type EmailSenderCategory =
   | "buyer_orders"
   | "seller_orders"
@@ -380,30 +401,106 @@ function formatShortDate(date: Date) {
   }).format(date);
 }
 
+function renderEmailAction(action: EmailAction, variant: "primary" | "secondary" = "primary") {
+  const background = variant === "primary" ? "#1f4d3b" : "#efe7dc";
+  const color = variant === "primary" ? "#f7f3ee" : "#1f4d3b";
+  const border = variant === "primary" ? "none" : "1px solid #d8cfc3";
+
+  return `<a href="${escapeHtml(action.url)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:${background};color:${color};text-decoration:none;font-weight:600;border:${border}">${escapeHtml(action.label)}</a>`;
+}
+
+function renderEmailDetails(details: EmailDetail[]) {
+  if (!details.length) {
+    return "";
+  }
+
+  return `
+    <div style="margin:20px 0 0;padding:16px 18px;border:1px solid #e4dbcf;border-radius:18px;background:#fbf8f4">
+      ${details
+        .map(
+          (detail, index) => `
+            <div style="padding:${index === 0 ? "0" : "12px 0 0"};margin:${index === details.length - 1 ? "0" : "0 0 12px"};${index === details.length - 1 ? "" : "border-bottom:1px solid #ebe2d6;"}">
+              <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#7c6f64;margin:0 0 4px">${escapeHtml(detail.label)}</div>
+              <div style="font-size:16px;color:#292524">${escapeHtml(detail.value)}</div>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderEmailLayout(input: EmailLayoutInput) {
+  const appUrl = getAppUrl();
+  const supportUrl = `${appUrl}/support`;
+  const footerMessage = input.footerMessage ?? "Need help? Visit TailorGraph Support.";
+  const introHtml = (input.introParagraphs ?? [])
+    .map((paragraph) => `<p style="margin:0 0 12px;color:#44403c;font-size:16px;line-height:1.65">${escapeHtml(paragraph)}</p>`)
+    .join("");
+  const detailsHtml = renderEmailDetails(input.details ?? []);
+  const actionHtml = [
+    input.primaryAction ? renderEmailAction(input.primaryAction, "primary") : "",
+    input.secondaryAction ? renderEmailAction(input.secondaryAction, "secondary") : ""
+  ]
+    .filter(Boolean)
+    .join('<span style="display:inline-block;width:12px"></span>');
+
+  return `
+    <div style="margin:0;padding:24px;background:#f3eee7;font-family:Georgia,serif;color:#292524">
+      <div style="max-width:640px;margin:0 auto">
+        <div style="margin:0 0 14px">
+          <span style="display:inline-block;padding:7px 12px;border-radius:999px;background:#e7ded1;color:#5f5146;font-size:12px;letter-spacing:0.12em;text-transform:uppercase">${escapeHtml(
+            input.eyebrow ?? "TailorGraph"
+          )}</span>
+        </div>
+        <div style="background:#fffdf9;border:1px solid #e4dbcf;border-radius:28px;padding:32px 28px;box-shadow:0 10px 30px rgba(41,37,36,0.06)">
+          <h1 style="margin:0 0 18px;font-size:32px;line-height:1.15;color:#1c1917">${escapeHtml(input.title)}</h1>
+          ${introHtml}
+          ${input.bodyHtml ?? ""}
+          ${detailsHtml}
+          ${actionHtml ? `<div style="margin:24px 0 0">${actionHtml}</div>` : ""}
+        </div>
+        <div style="padding:18px 8px 0;color:#6b5f55;font-size:13px;line-height:1.6">
+          <p style="margin:0 0 8px">${escapeHtml(footerMessage)}</p>
+          <p style="margin:0"><a href="${escapeHtml(supportUrl)}" style="color:#1f4d3b;text-decoration:none">Support</a> | <a href="${escapeHtml(
+            appUrl
+          )}" style="color:#1f4d3b;text-decoration:none">TailorGraph</a></p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function purchaseBuyerEmail(context: OrderNotificationContext) {
   const { order, listing, seller } = context;
   const itemTitle = escapeHtml(order.listingTitle);
-  const sellerName = escapeHtml(`@${seller.username || order.sellerName}`);
   const orderUrl = `${getAppUrl()}/buyer/orders`;
   const imageHtml =
     listing?.media[0]?.kind === "image"
-      ? `<p style="margin:0 0 16px"><img src="${escapeHtml(listing.media[0].url)}" alt="${itemTitle}" style="max-width:220px;border-radius:16px;display:block" /></p>`
+      ? `<div style="margin:6px 0 0"><img src="${escapeHtml(listing.media[0].url)}" alt="${itemTitle}" style="width:100%;max-width:240px;border-radius:20px;display:block;border:1px solid #e4dbcf" /></div>`
       : "";
 
   return {
     subject: `TailorGraph purchase confirmed: ${order.listingTitle}`,
     text: `Your TailorGraph purchase is confirmed.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTotal paid: ${formatCurrency(order.amount)}\n\nYou can review tracking and delivery updates in My Purchases: ${orderUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">Purchase confirmed</h1>
-        ${imageHtml}
-        <p style="margin:0 0 12px">Thank you for your purchase on TailorGraph.</p>
-        <p style="margin:0 0 8px"><strong>Item:</strong> ${itemTitle}</p>
-        <p style="margin:0 0 8px"><strong>Seller:</strong> ${sellerName}</p>
-        <p style="margin:0 0 16px"><strong>Total paid:</strong> ${escapeHtml(formatCurrency(order.amount))}</p>
-        <p style="margin:0"><a href="${orderUrl}">View My Purchases</a></p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Buyer Orders",
+      title: "Purchase confirmed",
+      introParagraphs: [
+        "Thank you for your purchase on TailorGraph.",
+        "We will keep you updated as the seller ships your order."
+      ],
+      bodyHtml: imageHtml,
+      details: [
+        { label: "Item", value: order.listingTitle },
+        { label: "Seller", value: `@${seller.username || order.sellerName}` },
+        { label: "Total paid", value: formatCurrency(order.amount) }
+      ],
+      primaryAction: {
+        label: "View My Purchases",
+        url: orderUrl
+      }
+    })
   };
 }
 
@@ -414,15 +511,23 @@ function purchaseSellerEmail(context: OrderNotificationContext) {
   return {
     subject: `TailorGraph order received: ${order.listingTitle}`,
     text: `You have a new TailorGraph order.\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTotal paid: ${formatCurrency(order.amount)}\n\nReview and ship it from the seller dashboard: ${sellerUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">New order received</h1>
-        <p style="margin:0 0 8px"><strong>Item:</strong> ${escapeHtml(order.listingTitle)}</p>
-        <p style="margin:0 0 8px"><strong>Buyer:</strong> ${escapeHtml(buyer.name)}</p>
-        <p style="margin:0 0 16px"><strong>Total paid:</strong> ${escapeHtml(formatCurrency(order.amount))}</p>
-        <p style="margin:0"><a href="${sellerUrl}">Open Seller Dashboard</a></p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Seller Orders",
+      title: "New order received",
+      introParagraphs: [
+        "A new order just came through on TailorGraph.",
+        "Review the order details and get shipping started from your seller dashboard."
+      ],
+      details: [
+        { label: "Item", value: order.listingTitle },
+        { label: "Buyer", value: buyer.name },
+        { label: "Total paid", value: formatCurrency(order.amount) }
+      ],
+      primaryAction: {
+        label: "Open Seller Dashboard",
+        url: sellerUrl
+      }
+    })
   };
 }
 
@@ -434,15 +539,20 @@ function shipmentBuyerEmail(context: OrderNotificationContext) {
   return {
     subject: `TailorGraph shipment update: ${order.listingTitle}`,
     text: `Your order has shipped.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\n\nReview shipping updates here: ${buyerUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">Your order has shipped</h1>
-        <p style="margin:0 0 8px"><strong>Item:</strong> ${escapeHtml(order.listingTitle)}</p>
-        <p style="margin:0 0 8px"><strong>Seller:</strong> @${escapeHtml(seller.username || order.sellerName)}</p>
-        <p style="margin:0 0 16px"><strong>Tracking:</strong> ${escapeHtml(tracking)}</p>
-        <p style="margin:0"><a href="${buyerUrl}">View My Purchases</a></p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Buyer Orders",
+      title: "Your order has shipped",
+      introParagraphs: ["Your seller has marked this order as shipped."],
+      details: [
+        { label: "Item", value: order.listingTitle },
+        { label: "Seller", value: `@${seller.username || order.sellerName}` },
+        { label: "Tracking", value: tracking }
+      ],
+      primaryAction: {
+        label: "View My Purchases",
+        url: buyerUrl
+      }
+    })
   };
 }
 
@@ -459,14 +569,18 @@ function directMessageEmail(context: DirectMessageNotificationContext) {
   return {
     subject: `New TailorGraph message from @${senderName}`,
     text: `You have a new TailorGraph message from @${senderName}.\n\n"${preview}"\n\nReply here: ${messagesUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">New message</h1>
-        <p style="margin:0 0 12px">You have a new message from <strong>@${escapeHtml(senderName)}</strong>.</p>
-        <p style="margin:0 0 16px">"${escapeHtml(preview)}"</p>
-        <p style="margin:0"><a href="${messagesUrl}">Open Messages</a></p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Messages",
+      title: "New message",
+      introParagraphs: [`You have a new message from @${senderName}.`],
+      bodyHtml: `<div style="margin:18px 0 0;padding:18px;border-radius:20px;background:#fbf8f4;border:1px solid #e4dbcf;color:#44403c;font-size:16px;line-height:1.65">"${escapeHtml(
+        preview
+      )}"</div>`,
+      primaryAction: {
+        label: "Open Messages",
+        url: messagesUrl
+      }
+    })
   };
 }
 
@@ -477,14 +591,19 @@ function newListingFollowerEmail(context: NewListingNotificationContext) {
   return {
     subject: `New TailorGraph listing from @${sellerName}`,
     text: `@${sellerName} just listed a new item on TailorGraph.\n\n${context.listing.title}\n${formatCurrency(context.listing.price)}\n\nView listing: ${listingUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">New listing from @${escapeHtml(sellerName)}</h1>
-        <p style="margin:0 0 8px"><strong>${escapeHtml(context.listing.title)}</strong></p>
-        <p style="margin:0 0 16px">${escapeHtml(formatCurrency(context.listing.price))}</p>
-        <p style="margin:0"><a href="${listingUrl}">View listing</a></p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Alerts",
+      title: `New listing from @${sellerName}`,
+      introParagraphs: ["A seller you follow just listed something new on TailorGraph."],
+      details: [
+        { label: "Listing", value: context.listing.title },
+        { label: "Price", value: formatCurrency(context.listing.price) }
+      ],
+      primaryAction: {
+        label: "View Listing",
+        url: listingUrl
+      }
+    })
   };
 }
 
@@ -492,14 +611,19 @@ function emailVerificationEmail(context: AccountEmailVerificationContext) {
   return {
     subject: "Verify your TailorGraph email address",
     text: `Verify your TailorGraph email address by opening this link:\n\n${context.verificationUrl}\n\nIf you did not request this, you can ignore this email.`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">Verify your email</h1>
-        <p style="margin:0 0 12px">Open the link below to confirm that this email address belongs to your TailorGraph account.</p>
-        <p style="margin:0 0 16px"><a href="${context.verificationUrl}">Verify my email address</a></p>
-        <p style="margin:0">If you did not request this, you can safely ignore this message.</p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Account",
+      title: "Verify your email",
+      introParagraphs: [
+        "Open the link below to confirm that this email address belongs to your TailorGraph account.",
+        "If you did not request this, you can safely ignore this message."
+      ],
+      primaryAction: {
+        label: "Verify my email address",
+        url: context.verificationUrl
+      },
+      footerMessage: "This verification link was sent because a TailorGraph account used this email address."
+    })
   };
 }
 
@@ -507,14 +631,19 @@ function passwordResetEmail(context: PasswordResetNotificationContext) {
   return {
     subject: "Reset your TailorGraph password",
     text: `Reset your TailorGraph password by opening this link:\n\n${context.resetUrl}\n\nIf you did not request this, you can ignore this email.`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">Reset your password</h1>
-        <p style="margin:0 0 12px">Open the link below to choose a new password for your TailorGraph account.</p>
-        <p style="margin:0 0 16px"><a href="${context.resetUrl}">Reset my password</a></p>
-        <p style="margin:0">If you did not request this, you can safely ignore this message.</p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Account",
+      title: "Reset your password",
+      introParagraphs: [
+        "Open the link below to choose a new password for your TailorGraph account.",
+        "If you did not request this, you can safely ignore this message."
+      ],
+      primaryAction: {
+        label: "Reset my password",
+        url: context.resetUrl
+      },
+      footerMessage: "This password reset link was requested for a TailorGraph account."
+    })
   };
 }
 
@@ -526,15 +655,23 @@ function welcomeEmail(context: WelcomeNotificationContext) {
   return {
     subject: "Welcome to TailorGraph",
     text: `Welcome to TailorGraph.\n\nStart with your measurements: ${measurementsUrl}\nBrowse the marketplace: ${marketplaceUrl}\nNeed help? Visit Support: ${supportUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">Welcome to TailorGraph</h1>
-        <p style="margin:0 0 12px">Your account is ready. The best next step is saving the measurements that fit you well.</p>
-        <p style="margin:0 0 12px"><a href="${measurementsUrl}">Start with your measurements</a></p>
-        <p style="margin:0 0 12px"><a href="${marketplaceUrl}">Browse the marketplace</a></p>
-        <p style="margin:0"><a href="${supportUrl}">Visit Support</a> if you need help getting started.</p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Hello",
+      title: "Welcome to TailorGraph",
+      introParagraphs: [
+        "Your account is ready.",
+        "The best next step is saving the measurements that fit you well so TailorGraph can work in your favor."
+      ],
+      primaryAction: {
+        label: "Start with your measurements",
+        url: measurementsUrl
+      },
+      secondaryAction: {
+        label: "Browse the marketplace",
+        url: marketplaceUrl
+      },
+      footerMessage: `Need help getting started? Visit TailorGraph Support: ${supportUrl}`
+    })
   };
 }
 
@@ -542,16 +679,20 @@ function supportRequestConfirmationEmail(context: SupportRequestNotificationCont
   const supportUrl = `${getAppUrl()}/support`;
   return {
     subject: `TailorGraph support request received: ${context.request.subject}`,
-    text: `We received your TailorGraph ${context.request.kind} request.\n\nSubject: ${context.request.subject}\nTopic: ${context.request.topic}\n\nWe’re looking into it and will follow up as needed. You can revisit support here: ${supportUrl}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">We received your request</h1>
-        <p style="margin:0 0 8px"><strong>Subject:</strong> ${escapeHtml(context.request.subject)}</p>
-        <p style="margin:0 0 16px"><strong>Topic:</strong> ${escapeHtml(context.request.topic)}</p>
-        <p style="margin:0 0 16px">We’re looking into it and will follow up as needed.</p>
-        <p style="margin:0"><a href="${supportUrl}">Return to Support</a></p>
-      </div>
-    `
+    text: `We received your TailorGraph ${context.request.kind} request.\n\nSubject: ${context.request.subject}\nTopic: ${context.request.topic}\n\nWe're looking into it and will follow up as needed. You can revisit support here: ${supportUrl}`,
+    html: renderEmailLayout({
+      eyebrow: "Support",
+      title: "We received your request",
+      introParagraphs: ["We're looking into it and will follow up as needed."],
+      details: [
+        { label: "Subject", value: context.request.subject },
+        { label: "Topic", value: context.request.topic }
+      ],
+      primaryAction: {
+        label: "Return to Support",
+        url: supportUrl
+      }
+    })
   };
 }
 
@@ -562,18 +703,22 @@ function supportRequestInternalEmail(context: SupportRequestNotificationContext)
   return {
     subject: `TailorGraph ${subject.toLowerCase()}: ${request.subject}`,
     text: `${subject}\n\nRequester: ${request.requesterName} <${request.requesterEmail}>\nRole: ${request.requesterRole}\nKind: ${request.kind}\nTopic: ${request.topic}\nOrder ID: ${request.orderId || "None"}\nListing ID: ${request.listingId || "None"}\n\n${request.message}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">${escapeHtml(subject)}</h1>
-        <p style="margin:0 0 8px"><strong>Requester:</strong> ${escapeHtml(request.requesterName)} &lt;${escapeHtml(request.requesterEmail)}&gt;</p>
-        <p style="margin:0 0 8px"><strong>Role:</strong> ${escapeHtml(request.requesterRole)}</p>
-        <p style="margin:0 0 8px"><strong>Kind:</strong> ${escapeHtml(request.kind)}</p>
-        <p style="margin:0 0 8px"><strong>Topic:</strong> ${escapeHtml(request.topic)}</p>
-        <p style="margin:0 0 8px"><strong>Order ID:</strong> ${escapeHtml(request.orderId || "None")}</p>
-        <p style="margin:0 0 16px"><strong>Listing ID:</strong> ${escapeHtml(request.listingId || "None")}</p>
-        <p style="margin:0;white-space:pre-wrap">${escapeHtml(request.message)}</p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Support",
+      title: subject,
+      details: [
+        { label: "Requester", value: `${request.requesterName} <${request.requesterEmail}>` },
+        { label: "Role", value: request.requesterRole },
+        { label: "Kind", value: request.kind },
+        { label: "Topic", value: request.topic },
+        { label: "Order ID", value: request.orderId || "None" },
+        { label: "Listing ID", value: request.listingId || "None" }
+      ],
+      bodyHtml: `<div style="margin:20px 0 0;padding:18px;border-radius:20px;background:#fbf8f4;border:1px solid #e4dbcf;color:#44403c;font-size:15px;line-height:1.7;white-space:pre-wrap">${escapeHtml(
+        request.message
+      )}</div>`,
+      footerMessage: "This alert was generated from the TailorGraph support center."
+    })
   };
 }
 
@@ -728,14 +873,16 @@ export async function sendSenderTestNotification(input: { to: string; category: 
     category: input.category,
     subject: `TailorGraph sender test: ${senderAddress}`,
     text: `This is a TailorGraph sender test.\n\nCategory: ${input.category}\nFrom: ${senderLabel}\n${replyBehavior}`,
-    html: `
-      <div style="font-family:Georgia,serif;line-height:1.5;color:#292524">
-        <h1 style="font-size:28px;margin:0 0 16px">TailorGraph sender test</h1>
-        <p style="margin:0 0 8px"><strong>Category:</strong> ${escapeHtml(input.category)}</p>
-        <p style="margin:0 0 8px"><strong>From:</strong> ${escapeHtml(senderLabel)}</p>
-        <p style="margin:0">${escapeHtml(replyBehavior)}</p>
-      </div>
-    `
+    html: renderEmailLayout({
+      eyebrow: "Sender Test",
+      title: "TailorGraph sender test",
+      details: [
+        { label: "Category", value: input.category },
+        { label: "From", value: senderLabel }
+      ],
+      introParagraphs: [replyBehavior],
+      footerMessage: "This is an internal sender verification email for TailorGraph."
+    })
   });
 }
 
