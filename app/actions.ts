@@ -84,6 +84,7 @@ import {
 import { saveListingMediaFiles } from "@/lib/media";
 import {
   EMAIL_SENDER_TEST_CATEGORIES,
+  type EmailSenderCategory,
   sendDirectMessageNotification,
   sendEmailVerificationNotification,
   sendNewListingFollowerNotification,
@@ -4316,6 +4317,34 @@ function isResendRateLimitError(error: unknown) {
   return candidate.statusCode === 429 || candidate.name === "rate_limit_exceeded";
 }
 
+const SENDER_TEST_INTERVAL_MS = 1250;
+const SENDER_TEST_RATE_LIMIT_BACKOFF_MS = [2000, 4000];
+
+async function sendSenderTestNotificationWithBackoff(input: {
+  to: string;
+  category: EmailSenderCategory;
+  runToken: string;
+}) {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= SENDER_TEST_RATE_LIMIT_BACKOFF_MS.length; attempt += 1) {
+    try {
+      await sendSenderTestNotification(input);
+      return;
+    } catch (error) {
+      lastError = error;
+
+      if (!isResendRateLimitError(error) || attempt === SENDER_TEST_RATE_LIMIT_BACKOFF_MS.length) {
+        throw error;
+      }
+
+      await delay(SENDER_TEST_RATE_LIMIT_BACKOFF_MS[attempt]);
+    }
+  }
+
+  throw lastError;
+}
+
 export async function sendSenderEmailTestsAction(formData: FormData) {
   redirectIfDatabaseUnavailable("/admin?emailTestError=Add+DATABASE_URL+to+send+email+tests");
   const user = await getCurrentUser();
@@ -4342,26 +4371,13 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
   }
 
   for (const category of EMAIL_SENDER_TEST_CATEGORIES) {
-    try {
-      await sendSenderTestNotification({
-        to: recipient.email,
-        category,
-        runToken
-      });
-    } catch (error) {
-      if (!isResendRateLimitError(error)) {
-        throw error;
-      }
+    await sendSenderTestNotificationWithBackoff({
+      to: recipient.email,
+      category,
+      runToken
+    });
 
-      await delay(1000);
-      await sendSenderTestNotification({
-        to: recipient.email,
-        category,
-        runToken
-      });
-    }
-
-    await delay(250);
+    await delay(SENDER_TEST_INTERVAL_MS);
   }
 
   await recordNotificationDelivery({
