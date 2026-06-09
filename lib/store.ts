@@ -82,7 +82,7 @@ const defaultNotificationPreferences: User["notificationPreferences"] = {
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 31;
+const SCHEMA_VERSION = 32;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -235,6 +235,7 @@ async function initSchema() {
       email TEXT NOT NULL UNIQUE,
       email_verified BOOLEAN NOT NULL DEFAULT FALSE,
       phone_number TEXT NOT NULL DEFAULT '',
+      is_admin BOOLEAN NOT NULL DEFAULT FALSE,
       password_hash TEXT NOT NULL,
       role TEXT NOT NULL,
       seller_zip_code TEXT NOT NULL DEFAULT '',
@@ -486,6 +487,7 @@ async function initSchema() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS seller_location TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_number TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS business_name TEXT NOT NULL DEFAULT '';
     ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_description TEXT NOT NULL DEFAULT '';
@@ -680,6 +682,7 @@ function mapUser(row: Record<string, unknown>): User {
     id: String(row.id),
     name: String(row.name),
     username: String(row.username ?? ""),
+    isAdmin: Boolean(row.is_admin),
     businessName: String(row.business_name ?? ""),
     profileDescription: String(row.profile_description ?? ""),
     showPersonalNameOnProfile: Boolean(row.show_personal_name_on_profile),
@@ -1487,6 +1490,7 @@ export async function createUser(input: {
     id,
     name: String(userResult.rows[0].name),
     username: String(userResult.rows[0].username),
+    isAdmin: false,
     businessName: "",
     profileDescription: "",
     showPersonalNameOnProfile: false,
@@ -2674,6 +2678,23 @@ export async function listUsers(): Promise<User[]> {
      ORDER BY users.created_at DESC`
   );
   return result.rows.map(mapUser);
+}
+
+export async function countAdminUsers(): Promise<number> {
+  if (!databaseConfigured) {
+    return 0;
+  }
+
+  await ensureSchema();
+  const result = await requirePool().query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM users WHERE is_admin = TRUE"
+  );
+  return Number(result.rows[0]?.count ?? 0);
+}
+
+export async function updateUserAdminAccess(userId: string, isAdmin: boolean): Promise<void> {
+  await ensureSchema();
+  await requirePool().query("UPDATE users SET is_admin = $1 WHERE id = $2", [isAdmin, userId]);
 }
 
 export async function listAllOrders(): Promise<Order[]> {

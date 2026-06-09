@@ -12,5 +12,5 @@ export function isAdminUser(user: User | null) {
     return false;
   }
 
-  return getAdminEmails().includes(user.email.toLowerCase());
+  return user.isAdmin || getAdminEmails().includes(user.email.toLowerCase());
 }

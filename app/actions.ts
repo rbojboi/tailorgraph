@@ -18,6 +18,7 @@ import {
   createListing,
   createOffer,
   createOrder,
+  countAdminUsers,
   createEmailVerificationToken,
   createPasswordResetToken,
   createSavedSearch,
@@ -70,6 +71,7 @@ import {
   updateOrderShippingWithProvider,
   updateSellerLocation,
   updateNotificationPreferences,
+  updateUserAdminAccess,
   updateUserEmail,
   updateUser,
   updateUsername,
@@ -4326,4 +4328,22 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
       `Sent ${EMAIL_SENDER_TEST_CATEGORIES.length} sender tests to @${username}.`
     )}`
   );
+}
+
+export async function claimFirstAdminAccessAction() {
+  redirectIfDatabaseUnavailable("/admin/setup?authError=Add+DATABASE_URL+to+set+up+admin+access");
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/login?authError=Please+log+in+to+claim+admin+access");
+  }
+
+  const existingAdmins = await countAdminUsers();
+  if (existingAdmins > 0) {
+    redirect("/?authError=Admin+access+has+already+been+configured");
+  }
+
+  await updateUserAdminAccess(user.id, true);
+  revalidatePath("/admin");
+  redirect("/admin?emailTestSent=Admin+access+granted");
 }

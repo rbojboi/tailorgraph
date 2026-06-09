@@ -92,6 +92,7 @@ export type User = {
   id: string;
   name: string;
   username: string;
+  isAdmin: boolean;
   businessName: string;
   profileDescription: string;
   showPersonalNameOnProfile: boolean;

@@ -5,7 +5,7 @@ import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
 import { formatDisplayValue } from "@/lib/display";
-import { ensureSeedData, listAllOrders, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
+import { countAdminUsers, ensureSeedData, listAllOrders, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
 import type { Listing, Order, SupportRequest, User } from "@/lib/types";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -24,8 +24,12 @@ export default async function AdminPage({
   const params = await searchParams;
   const emailTestSent = firstValue(params.emailTestSent);
   const emailTestError = firstValue(params.emailTestError);
+  const existingAdmins = await countAdminUsers();
 
   if (!isAdminUser(user)) {
+    if (existingAdmins === 0) {
+      redirect("/admin/setup");
+    }
     redirect("/?authError=Admin+access+required");
   }
 
