@@ -243,6 +243,25 @@ export function getEmailSenderForCategory(category: EmailSenderCategory) {
   );
 }
 
+function deriveReplyDomain(domain: string) {
+  return domain.startsWith("mail.") ? domain.slice("mail.".length) : domain;
+}
+
+function getReplyToForCategory(category: EmailSenderCategory, sender: string) {
+  if (category === "no_reply") {
+    return undefined;
+  }
+
+  const parsedSender = parseEmailSender(sender);
+  const replyLocalPart = senderLocalPartForCategory(category);
+
+  if (!parsedSender) {
+    return process.env.EMAIL_REPLY_TO || `${replyLocalPart}@tailorgraph.com`;
+  }
+
+  return `${replyLocalPart}@${deriveReplyDomain(parsedSender.domain)}`;
+}
+
 function getResendClient() {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) {
@@ -320,9 +339,7 @@ async function sendEmailNotification(input: EmailInput) {
 
   const category = input.category ?? "no_reply";
   const from = input.fromOverride || getEmailSenderForCategory(category);
-  const parsedSender = parseEmailSender(from);
-  const emailReplyTo =
-    input.replyToOverride ?? (category === "no_reply" ? undefined : parsedSender?.address || process.env.EMAIL_REPLY_TO || undefined);
+  const emailReplyTo = input.replyToOverride ?? getReplyToForCategory(category, from);
 
   await getResendClient().emails.send({
     from,
