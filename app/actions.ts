@@ -4320,6 +4320,30 @@ function isResendRateLimitError(error: unknown) {
 const SENDER_TEST_INTERVAL_MS = 1250;
 const SENDER_TEST_RATE_LIMIT_BACKOFF_MS = [2000, 4000];
 
+function describeSenderTestError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return "unknown error";
+  }
+
+  const candidate = error as { message?: unknown; name?: unknown; statusCode?: unknown };
+  const message = typeof candidate.message === "string" ? candidate.message : undefined;
+  const name = typeof candidate.name === "string" ? candidate.name : undefined;
+  const statusCode =
+    typeof candidate.statusCode === "number" || typeof candidate.statusCode === "string"
+      ? String(candidate.statusCode)
+      : undefined;
+
+  if (message) {
+    return message;
+  }
+
+  if (name && statusCode) {
+    return `${name} (${statusCode})`;
+  }
+
+  return name || statusCode || "unknown error";
+}
+
 async function sendSenderTestNotificationWithBackoff(input: {
   to: string;
   category: EmailSenderCategory;
@@ -4355,6 +4379,7 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
 
   const username = stringValue(formData, "username") || "bobbyveebee";
   const runToken = stringValue(formData, "runToken");
+  const requestedCategory = stringValue(formData, "category");
   const recipient = await findUserByUsername(username);
 
   if (!recipient?.email) {
@@ -4370,14 +4395,31 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
     redirect(`/admin?emailTestSent=${encodeURIComponent(`Sender test batch already processed for @${username}.`)}`);
   }
 
-  for (const category of EMAIL_SENDER_TEST_CATEGORIES) {
-    await sendSenderTestNotificationWithBackoff({
-      to: recipient.email,
-      category,
-      runToken
-    });
+  const categories =
+    requestedCategory && EMAIL_SENDER_TEST_CATEGORIES.includes(requestedCategory as EmailSenderCategory)
+      ? [requestedCategory as EmailSenderCategory]
+      : EMAIL_SENDER_TEST_CATEGORIES;
+  const acceptedCategories: EmailSenderCategory[] = [];
+  const failedCategories: Array<{ category: EmailSenderCategory; reason: string }> = [];
 
-    await delay(SENDER_TEST_INTERVAL_MS);
+  for (const [index, category] of categories.entries()) {
+    try {
+      await sendSenderTestNotificationWithBackoff({
+        to: recipient.email,
+        category,
+        runToken
+      });
+      acceptedCategories.push(category);
+    } catch (error) {
+      failedCategories.push({
+        category,
+        reason: describeSenderTestError(error)
+      });
+    }
+
+    if (index < categories.length - 1) {
+      await delay(SENDER_TEST_INTERVAL_MS);
+    }
   }
 
   await recordNotificationDelivery({
@@ -4387,10 +4429,26 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
     eventType: "sender_test_batch"
   });
 
+  const successMessage =
+    acceptedCategories.length > 0
+      ? requestedCategory && acceptedCategories.length === 1
+        ? `Accepted sender test from ${acceptedCategories[0]} for @${username}.`
+        : `Accepted ${acceptedCategories.length} sender test${acceptedCategories.length === 1 ? "" : "s"} for @${username}: ${acceptedCategories.join(", ")}.`
+      : undefined;
+  const failureMessage =
+    failedCategories.length > 0
+      ? `Failed ${failedCategories.length} sender test${failedCategories.length === 1 ? "" : "s"}: ${failedCategories
+          .map(({ category, reason }) => `${category} (${reason})`)
+          .join(", ")}.`
+      : undefined;
+
   redirect(
-    `/admin?emailTestSent=${encodeURIComponent(
-      `Sent ${EMAIL_SENDER_TEST_CATEGORIES.length} sender tests to @${username}.`
-    )}`
+    `/admin?${[
+      successMessage ? `emailTestSent=${encodeURIComponent(successMessage)}` : "",
+      failureMessage ? `emailTestError=${encodeURIComponent(failureMessage)}` : ""
+    ]
+      .filter(Boolean)
+      .join("&")}`
   );
 }
 

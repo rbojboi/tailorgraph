@@ -6,6 +6,7 @@ import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
 import { formatDisplayValue } from "@/lib/display";
+import { EMAIL_SENDER_TEST_CATEGORIES } from "@/lib/notifications";
 import { countAdminUsers, ensureSeedData, listAllOrders, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
 import type { Listing, Order, SupportRequest, User } from "@/lib/types";
 
@@ -78,21 +79,36 @@ export default async function AdminPage({
               {emailTestError}
             </p>
           ) : null}
-          <form action={sendSenderEmailTestsAction} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-            <input type="hidden" name="runToken" value={senderTestRunToken} />
-            <label className="flex-1">
-              <span className="text-sm font-medium text-stone-700">Username</span>
-              <input
-                name="username"
-                type="text"
-                defaultValue="bobbyveebee"
-                className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
-              />
-            </label>
-            <button
-              type="submit"
-              className="rounded-full border border-stone-900 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-stone-950 hover:text-white"
-            >
+            <form action={sendSenderEmailTestsAction} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <input type="hidden" name="runToken" value={senderTestRunToken} />
+              <label className="flex-1">
+                <span className="text-sm font-medium text-stone-700">Username</span>
+                <input
+                  name="username"
+                  type="text"
+                  defaultValue="bobbyveebee"
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
+                />
+              </label>
+              <label className="sm:w-56">
+                <span className="text-sm font-medium text-stone-700">Category</span>
+                <select
+                  name="category"
+                  defaultValue=""
+                  className="mt-2 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
+                >
+                  <option value="">All senders</option>
+                  {EMAIL_SENDER_TEST_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="submit"
+                className="rounded-full border border-stone-900 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-stone-950 hover:text-white"
+              >
               Send Sender Tests
             </button>
           </form>
