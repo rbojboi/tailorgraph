@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { sendSenderEmailTestsAction } from "@/app/actions";
@@ -40,6 +41,7 @@ export default async function AdminPage({
   const activeListings = listings.filter((listing: Listing) => listing.status === "active").length;
   const soldListings = listings.filter((listing: Listing) => listing.status === "sold").length;
   const paidOrders = orders.filter((order: Order) => order.status === "paid").length;
+  const senderTestRunToken = randomUUID();
 
   return (
     <AppShell>
@@ -77,6 +79,7 @@ export default async function AdminPage({
             </p>
           ) : null}
           <form action={sendSenderEmailTestsAction} className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+            <input type="hidden" name="runToken" value={senderTestRunToken} />
             <label className="flex-1">
               <span className="text-sm font-medium text-stone-700">Username</span>
               <input

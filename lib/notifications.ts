@@ -873,7 +873,7 @@ export async function sendSupportRequestNotifications(context: SupportRequestNot
   }
 }
 
-export async function sendSenderTestNotification(input: { to: string; category: EmailSenderCategory }) {
+export async function sendSenderTestNotification(input: { to: string; category: EmailSenderCategory; runToken?: string }) {
   const sender = getEmailSenderForCategory(input.category);
   const parsedSender = parseEmailSender(sender);
   const senderAddress = parsedSender?.address ?? sender;
@@ -884,7 +884,9 @@ export async function sendSenderTestNotification(input: { to: string; category: 
       : `Replies should go back to ${senderAddress}.`;
 
   await sendEmailNotification({
-    eventKey: `sender-test:${input.category}:${input.to}:${Date.now()}`,
+    eventKey: input.runToken
+      ? `sender-test:${input.runToken}:${input.category}:${input.to.toLowerCase()}`
+      : `sender-test:${input.category}:${input.to}:${Date.now()}`,
     eventType: "sender_test",
     to: input.to,
     category: input.category,

@@ -43,6 +43,7 @@ import {
   getOrCreateListingMessageThread,
   isFollowingUser,
   isListingSavedByUser,
+  hasNotificationDelivery,
   listFollowerUsersForSeller,
   listSavedSearchesForUser,
   listOrdersByStripeCheckoutSessionId,
@@ -53,6 +54,7 @@ import {
   markOrderDelivered,
   markOrderPaidById,
   markUserStripeOnboardingComplete,
+  recordNotificationDelivery,
   reopenListing,
   reserveListing,
   restoreMessageThreadForUser,
@@ -4301,27 +4303,73 @@ export async function submitSupportRequestAction(formData: FormData) {
   redirect(`/support?saved=${kind === "dispute" ? "dispute-received" : "support-received"}`);
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isResendRateLimitError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as { statusCode?: unknown; name?: unknown };
+  return candidate.statusCode === 429 || candidate.name === "rate_limit_exceeded";
+}
+
 export async function sendSenderEmailTestsAction(formData: FormData) {
   redirectIfDatabaseUnavailable("/admin?emailTestError=Add+DATABASE_URL+to+send+email+tests");
   const user = await getCurrentUser();
 
-  if (!isAdminUser(user)) {
+  if (!user || !isAdminUser(user)) {
     redirect("/?authError=Admin+access+required");
   }
 
   const username = stringValue(formData, "username") || "bobbyveebee";
+  const runToken = stringValue(formData, "runToken");
   const recipient = await findUserByUsername(username);
 
   if (!recipient?.email) {
     redirect(`/admin?emailTestError=${encodeURIComponent(`Could not find an email for @${username}.`)}`);
   }
 
-  for (const category of EMAIL_SENDER_TEST_CATEGORIES) {
-    await sendSenderTestNotification({
-      to: recipient.email,
-      category
-    });
+  if (!runToken) {
+    redirect("/admin?emailTestError=Missing+sender+test+run+token");
   }
+
+  const batchEventKey = `sender-test-batch:${user.id}:${runToken}`;
+  if (await hasNotificationDelivery(batchEventKey)) {
+    redirect(`/admin?emailTestSent=${encodeURIComponent(`Sender test batch already processed for @${username}.`)}`);
+  }
+
+  for (const category of EMAIL_SENDER_TEST_CATEGORIES) {
+    try {
+      await sendSenderTestNotification({
+        to: recipient.email,
+        category,
+        runToken
+      });
+    } catch (error) {
+      if (!isResendRateLimitError(error)) {
+        throw error;
+      }
+
+      await delay(1000);
+      await sendSenderTestNotification({
+        to: recipient.email,
+        category,
+        runToken
+      });
+    }
+
+    await delay(250);
+  }
+
+  await recordNotificationDelivery({
+    eventKey: batchEventKey,
+    channel: "email",
+    recipient: recipient.email,
+    eventType: "sender_test_batch"
+  });
 
   redirect(
     `/admin?emailTestSent=${encodeURIComponent(
