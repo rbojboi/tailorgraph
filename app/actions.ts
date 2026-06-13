@@ -30,6 +30,7 @@ import {
   deleteMessageThreadForUser,
   deleteSavedSearch,
   dismissMarketplaceIntro,
+  claimNotificationDelivery,
   findListingById,
   findMessageThreadByIdForUser,
   findOrderById,
@@ -43,7 +44,6 @@ import {
   getOrCreateListingMessageThread,
   isFollowingUser,
   isListingSavedByUser,
-  hasNotificationDelivery,
   listFollowerUsersForSeller,
   listSavedSearchesForUser,
   listOrdersByStripeCheckoutSessionId,
@@ -54,7 +54,6 @@ import {
   markOrderDelivered,
   markOrderPaidById,
   markUserStripeOnboardingComplete,
-  recordNotificationDelivery,
   reopenListing,
   reserveListing,
   restoreMessageThreadForUser,
@@ -4353,7 +4352,10 @@ async function sendSenderTestNotificationWithBackoff(input: {
 
   for (let attempt = 0; attempt <= SENDER_TEST_RATE_LIMIT_BACKOFF_MS.length; attempt += 1) {
     try {
-      await sendSenderTestNotification(input);
+      await sendSenderTestNotification({
+        ...input,
+        skipDedupe: true
+      });
       return;
     } catch (error) {
       lastError = error;
@@ -4367,6 +4369,10 @@ async function sendSenderTestNotificationWithBackoff(input: {
   }
 
   throw lastError;
+}
+
+function senderTestEventKey(input: { runToken: string; category: EmailSenderCategory; to: string }) {
+  return `sender-test:${input.runToken}:${input.category}:${input.to.toLowerCase()}`;
 }
 
 export async function sendSenderEmailTestsAction(formData: FormData) {
@@ -4391,7 +4397,14 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
   }
 
   const batchEventKey = `sender-test-batch:${user.id}:${runToken}`;
-  if (await hasNotificationDelivery(batchEventKey)) {
+  const batchClaimed = await claimNotificationDelivery({
+    eventKey: batchEventKey,
+    channel: "email",
+    recipient: recipient.email,
+    eventType: "sender_test_batch"
+  });
+
+  if (!batchClaimed) {
     redirect(`/admin?emailTestSent=${encodeURIComponent(`Sender test batch already processed for @${username}.`)}`);
   }
 
@@ -4403,6 +4416,26 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
   const failedCategories: Array<{ category: EmailSenderCategory; reason: string }> = [];
 
   for (const [index, category] of categories.entries()) {
+    const eventKey = senderTestEventKey({
+      runToken,
+      category,
+      to: recipient.email
+    });
+    const categoryClaimed = await claimNotificationDelivery({
+      eventKey,
+      channel: "email",
+      recipient: recipient.email,
+      eventType: "sender_test"
+    });
+
+    if (!categoryClaimed) {
+      failedCategories.push({
+        category,
+        reason: "already processed for this test run"
+      });
+      continue;
+    }
+
     try {
       await sendSenderTestNotificationWithBackoff({
         to: recipient.email,
@@ -4421,13 +4454,6 @@ export async function sendSenderEmailTestsAction(formData: FormData) {
       await delay(SENDER_TEST_INTERVAL_MS);
     }
   }
-
-  await recordNotificationDelivery({
-    eventKey: batchEventKey,
-    channel: "email",
-    recipient: recipient.email,
-    eventType: "sender_test_batch"
-  });
 
   const successMessage =
     acceptedCategories.length > 0

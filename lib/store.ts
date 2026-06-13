@@ -3189,8 +3189,26 @@ export async function recordNotificationDelivery(input: {
     `INSERT INTO notification_deliveries (event_key, channel, recipient, event_type, created_at)
      VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT (event_key) DO NOTHING`,
+      [input.eventKey, input.channel, input.recipient, input.eventType]
+    );
+  }
+
+export async function claimNotificationDelivery(input: {
+  eventKey: string;
+  channel: "email" | "sms";
+  recipient: string;
+  eventType: string;
+}): Promise<boolean> {
+  await ensureSchema();
+  const result = await requirePool().query<{ event_key: string }>(
+    `INSERT INTO notification_deliveries (event_key, channel, recipient, event_type, created_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (event_key) DO NOTHING
+     RETURNING event_key`,
     [input.eventKey, input.channel, input.recipient, input.eventType]
   );
+
+  return Boolean(result.rowCount);
 }
 
 export async function listSavedUsersForUser(userId: string): Promise<User[]> {

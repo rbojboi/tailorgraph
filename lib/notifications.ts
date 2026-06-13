@@ -18,6 +18,7 @@ type EmailInput = {
   category?: EmailSenderCategory;
   fromOverride?: string;
   replyToOverride?: string;
+  skipDedupe?: boolean;
 };
 
 type SmsInput = {
@@ -333,7 +334,7 @@ async function sendEmailNotification(input: EmailInput) {
     return;
   }
 
-  if (await hasNotificationDelivery(input.eventKey)) {
+  if (!input.skipDedupe && (await hasNotificationDelivery(input.eventKey))) {
     return;
   }
 
@@ -350,12 +351,14 @@ async function sendEmailNotification(input: EmailInput) {
     text: input.text
   });
 
-  await recordNotificationDelivery({
-    eventKey: input.eventKey,
-    channel: "email",
-    recipient,
-    eventType: input.eventType
-  });
+  if (!input.skipDedupe) {
+    await recordNotificationDelivery({
+      eventKey: input.eventKey,
+      channel: "email",
+      recipient,
+      eventType: input.eventType
+    });
+  }
 }
 
 async function sendSmsNotification(input: SmsInput) {
@@ -873,7 +876,12 @@ export async function sendSupportRequestNotifications(context: SupportRequestNot
   }
 }
 
-export async function sendSenderTestNotification(input: { to: string; category: EmailSenderCategory; runToken?: string }) {
+export async function sendSenderTestNotification(input: {
+  to: string;
+  category: EmailSenderCategory;
+  runToken?: string;
+  skipDedupe?: boolean;
+}) {
   const sender = getEmailSenderForCategory(input.category);
   const parsedSender = parseEmailSender(sender);
   const senderAddress = parsedSender?.address ?? sender;
@@ -888,9 +896,10 @@ export async function sendSenderTestNotification(input: { to: string; category: 
       ? `sender-test:${input.runToken}:${input.category}:${input.to.toLowerCase()}`
       : `sender-test:${input.category}:${input.to}:${Date.now()}`,
     eventType: "sender_test",
-    to: input.to,
-    category: input.category,
-    subject: `TailorGraph sender test: ${senderAddress}`,
+      to: input.to,
+      category: input.category,
+      skipDedupe: input.skipDedupe,
+      subject: `TailorGraph sender test: ${senderAddress}`,
     text: `This is a TailorGraph sender test.\n\nCategory: ${input.category}\nFrom: ${senderLabel}\n${replyBehavior}`,
     html: renderEmailLayout({
       eyebrow: "Sender Test",
