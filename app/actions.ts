@@ -3811,6 +3811,7 @@ export async function createStripeConnectOnboardingAction() {
 
   const stripe = getStripe();
   let stripeAccountId = user.stripeAccountId;
+  let accountLinkUrl: string;
 
   try {
     if (!stripeAccountId) {
@@ -3831,10 +3832,10 @@ export async function createStripeConnectOnboardingAction() {
       account: stripeAccountId,
       refresh_url: `${getAppUrl()}/seller/connect/refresh`,
       return_url: `${getAppUrl()}/seller/connect/return`,
-      type: "account_onboarding"
-    });
+        type: "account_onboarding"
+      });
 
-    redirect(accountLink.url);
+    accountLinkUrl = accountLink.url;
   } catch (error) {
     const message =
       error instanceof Error
@@ -3842,6 +3843,8 @@ export async function createStripeConnectOnboardingAction() {
         : "Stripe could not start seller payout setup. Check the Stripe Connect settings and try again.";
     redirect(`/seller?authError=${encodeURIComponent(message)}`);
   }
+
+  redirect(accountLinkUrl);
 }
 
 export async function finalizeStripeOnboardingAction() {
