@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createListingAction, forceCreateListingAction } from "@/app/actions";
+import { createListingAction, createStripeConnectOnboardingAction, forceCreateListingAction } from "@/app/actions";
 import { SellerListingForm } from "@/components/seller-listing-form";
 import { AppShell, PageWrap, SectionTitle } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -59,6 +59,19 @@ export default async function NewSellerListingPage({ searchParams }: PageProps) 
           </div>
           {firstValue(filters.authError) ? (
             <p className="mt-4 rounded-2xl bg-rose-100 px-4 py-3 text-sm text-rose-900">{firstValue(filters.authError)}</p>
+          ) : null}
+          {!user.stripeOnboardingComplete ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <p className="text-sm font-semibold text-amber-950">Payout setup required before publishing</p>
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                You can prepare a draft now, but active listings require Stripe Connect so buyer payments can route to the seller.
+              </p>
+              <form action={createStripeConnectOnboardingAction} className="mt-3">
+                <button className="rounded-full bg-stone-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-stone-800">
+                  Set Up Seller Payouts
+                </button>
+              </form>
+            </div>
           ) : null}
         </section>
 

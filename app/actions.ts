@@ -122,11 +122,12 @@ import type {
   ShippingAddress,
   SupportRequestTopic,
   SweaterSpecs,
-  TrouserMeasurements,
-  TrouserSpecs,
-  WaistcoatMeasurements,
-  WaistcoatSpecs
-} from "@/lib/types";
+    TrouserMeasurements,
+    TrouserSpecs,
+    User,
+    WaistcoatMeasurements,
+    WaistcoatSpecs
+  } from "@/lib/types";
 
 function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
@@ -1012,6 +1013,38 @@ function redirectIfDatabaseUnavailable(path = "/?authError=Hosted+database+not+c
   if (!isDatabaseConfigured()) {
     redirect(path);
   }
+}
+
+const SELLER_PAYOUT_REQUIRED_MESSAGE = "Complete Stripe Connect payouts before publishing listings.";
+
+async function isSellerPayoutReady(seller: Pick<User, "id" | "stripeAccountId" | "stripeOnboardingComplete"> | null) {
+  if (!seller?.stripeAccountId || !isStripeConfigured()) {
+    return false;
+  }
+
+  try {
+    const account = await getStripe().accounts.retrieve(seller.stripeAccountId);
+    const ready = Boolean(account.details_submitted && account.charges_enabled && account.payouts_enabled);
+
+    if (seller.stripeOnboardingComplete !== ready) {
+      await markUserStripeOnboardingComplete(seller.id, ready);
+    }
+
+    return ready;
+  } catch {
+    return false;
+  }
+}
+
+async function redirectIfSellerPayoutsMissing(
+  seller: Pick<User, "id" | "stripeAccountId" | "stripeOnboardingComplete"> | null,
+  returnTo: string
+) {
+  if (await isSellerPayoutReady(seller)) {
+    return;
+  }
+
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(SELLER_PAYOUT_REQUIRED_MESSAGE)}`);
 }
 
 function validatePublishedListing(formData: FormData, category: string, mediaCount: number) {
@@ -2456,6 +2489,10 @@ export async function createListingAction(formData: FormData) {
   }
 
   const listingStatus = listingStatusFromIntent(stringValue(formData, "listingIntent"));
+  if (listingStatus === "active") {
+    await redirectIfSellerPayoutsMissing(user, "/seller/listings/new");
+  }
+
   const mediaFiles = formData
     .getAll("media")
     .filter((entry): entry is File => entry instanceof File && entry.size > 0);
@@ -2977,6 +3014,11 @@ export async function forceCreateListingAction(formData: FormData) {
   const draft = parseSellerListingDraft(stringValue(formData, "sellerListingDraft"));
   const media = parseSellerListingMedia(stringValue(formData, "sellerListingMedia"));
   const listingStatus = listingStatusFromIntent(sellerDraftStringValue(draft, "listingIntent"));
+
+  if (listingStatus === "active") {
+    await redirectIfSellerPayoutsMissing(user, "/seller/listings/new");
+  }
+
   const { input } = buildListingPayloadFromDraft(draft, media, sellerLocation, listingStatus);
 
   const createdListing = await createListing(user, input);
@@ -3102,7 +3144,12 @@ export async function startStripeCheckoutAction(formData: FormData) {
 
   const stripe = getStripe();
   const seller = await findUserById(listing.sellerId);
-  const destinationAccount = seller?.stripeOnboardingComplete ? seller.stripeAccountId : null;
+  const sellerPayoutReady = await isSellerPayoutReady(seller);
+  if (!sellerPayoutReady) {
+    redirect(`/cart?checkoutError=${encodeURIComponent("This seller needs to finish payout setup before checkout.")}`);
+  }
+
+  const destinationAccount = seller?.stripeAccountId ?? null;
   const applicationFeeAmount = destinationAccount ? Math.round(listing.price * 100 * 0.1) : undefined;
   const shippingAmount = listing.shippingPrice;
 
@@ -3240,7 +3287,12 @@ export async function startCartStripeCheckoutAction(formData: FormData) {
   const shippingAddress = await resolveCheckoutShippingAddress(formData, user);
   const stripe = getStripe();
   const seller = await findUserById(listings[0].sellerId);
-  const destinationAccount = seller?.stripeOnboardingComplete ? seller.stripeAccountId : null;
+  const sellerPayoutReady = await isSellerPayoutReady(seller);
+  if (!sellerPayoutReady) {
+    redirect(`/cart?checkoutError=${encodeURIComponent("This seller needs to finish payout setup before checkout.")}`);
+  }
+
+  const destinationAccount = seller?.stripeAccountId ?? null;
   const applicationFeeAmount = destinationAccount
     ? Math.round(listings.reduce((sum, listing) => sum + listing.price, 0) * 100 * 0.1)
     : undefined;
