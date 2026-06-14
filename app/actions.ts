@@ -3812,28 +3812,36 @@ export async function createStripeConnectOnboardingAction() {
   const stripe = getStripe();
   let stripeAccountId = user.stripeAccountId;
 
-  if (!stripeAccountId) {
-    const account = await stripe.accounts.create({
-      type: "express",
-      email: user.email,
-      business_type: "individual",
-      metadata: {
-        platformUserId: user.id
-      }
+  try {
+    if (!stripeAccountId) {
+      const account = await stripe.accounts.create({
+        type: "express",
+        email: user.email,
+        business_type: "individual",
+        metadata: {
+          platformUserId: user.id
+        }
+      });
+
+      stripeAccountId = account.id;
+      await updateUserStripeAccount(user.id, stripeAccountId);
+    }
+
+    const accountLink = await stripe.accountLinks.create({
+      account: stripeAccountId,
+      refresh_url: `${getAppUrl()}/seller/connect/refresh`,
+      return_url: `${getAppUrl()}/seller/connect/return`,
+      type: "account_onboarding"
     });
 
-    stripeAccountId = account.id;
-    await updateUserStripeAccount(user.id, stripeAccountId);
+    redirect(accountLink.url);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Stripe could not start seller payout setup. Check the Stripe Connect settings and try again.";
+    redirect(`/seller?authError=${encodeURIComponent(message)}`);
   }
-
-  const accountLink = await stripe.accountLinks.create({
-    account: stripeAccountId,
-    refresh_url: `${getAppUrl()}/seller/connect/refresh`,
-    return_url: `${getAppUrl()}/seller/connect/return`,
-    type: "account_onboarding"
-  });
-
-  redirect(accountLink.url);
 }
 
 export async function finalizeStripeOnboardingAction() {
