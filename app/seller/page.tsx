@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
-import { createStripeConnectOnboardingAction } from "@/app/actions";
 import { BuyerOfferFilterControl } from "@/components/buyer-offer-filter-control";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -321,11 +320,12 @@ export default async function SellerPage({
             </div>
 
             {stripeEnabled ? (
-              <form action={createStripeConnectOnboardingAction} className="mt-5">
-                <button className="rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white">
-                  {user.stripeAccountId ? "Open Connect onboarding" : "Start Connect onboarding"}
-                </button>
-              </form>
+              <Link
+                href="/seller/payouts"
+                className="mt-5 inline-flex rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white"
+              >
+                {user.stripeAccountId ? "Manage Payout Setup" : "Start Payout Setup"}
+              </Link>
             ) : (
               <p className="mt-5 rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
                 Add Stripe environment variables to enable onboarding and payout status.

@@ -1015,6 +1015,10 @@ function redirectIfDatabaseUnavailable(path = "/?authError=Hosted+database+not+c
   }
 }
 
+function isStripeConnectPlatformSetupError(error: unknown) {
+  return error instanceof Error && error.message.toLowerCase().includes("signed up for connect");
+}
+
 const SELLER_PAYOUT_REQUIRED_MESSAGE = "Complete Stripe Connect payouts before publishing listings.";
 
 async function isSellerPayoutReady(seller: Pick<User, "id" | "stripeAccountId" | "stripeOnboardingComplete"> | null) {
@@ -3837,11 +3841,15 @@ export async function createStripeConnectOnboardingAction() {
 
     accountLinkUrl = accountLink.url;
   } catch (error) {
+    if (isStripeConnectPlatformSetupError(error)) {
+      redirect("/seller/payouts?setupError=connect_platform_not_enabled");
+    }
+
     const message =
       error instanceof Error
         ? error.message
         : "Stripe could not start seller payout setup. Check the Stripe Connect settings and try again.";
-    redirect(`/seller?authError=${encodeURIComponent(message)}`);
+    redirect(`/seller/payouts?setupError=${encodeURIComponent(message)}`);
   }
 
   redirect(accountLinkUrl);
