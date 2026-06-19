@@ -11,6 +11,8 @@ type ShippoAddress = {
   state: string;
   zip: string;
   country: string;
+  phone?: string;
+  email?: string;
 };
 
 type ShippoParcel = {
@@ -114,7 +116,11 @@ function formatShippoErrors(messages?: Array<{ text?: string }>) {
   return message || "Shippo could not create a label for this order.";
 }
 
-function normalizeShippoAddress(address: ShippingAddress, fallbackName: string): ShippoAddress | null {
+function normalizeShippoAddress(
+  address: ShippingAddress,
+  fallbackName: string,
+  contact?: { email?: string; phone?: string }
+): ShippoAddress | null {
   if (!address.line1 || !address.city || !address.state || !address.postalCode || !address.country) {
     return null;
   }
@@ -126,7 +132,9 @@ function normalizeShippoAddress(address: ShippingAddress, fallbackName: string):
     city: address.city,
     state: address.state,
     zip: address.postalCode,
-    country: address.country.toUpperCase()
+    country: address.country.toUpperCase(),
+    phone: contact?.phone || undefined,
+    email: contact?.email || undefined
   };
 }
 
@@ -194,14 +202,23 @@ async function shippoRequest<T>(path: string, init: RequestInit) {
 
 function getNormalizedShippoAddresses(input: {
   order: Pick<Order, "id" | "shippingAddress">;
-  seller: Pick<User, "name" | "buyerProfile">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
 }) {
   const shipFromSource = getSellerShipFromAddress(input.seller);
-  const addressFrom = shipFromSource ? normalizeShippoAddress(shipFromSource, input.seller.name) : null;
+  const addressFrom = shipFromSource
+    ? normalizeShippoAddress(shipFromSource, input.seller.name, {
+        email: input.seller.email,
+        phone: input.seller.phoneNumber
+      })
+    : null;
   const addressTo = normalizeShippoAddress(input.order.shippingAddress, input.order.shippingAddress.fullName || "Buyer");
 
   if (!addressFrom) {
     throw new Error("Add a saved sender address in Account Settings before buying a label.");
+  }
+
+  if (!addressFrom.email || !addressFrom.phone) {
+    throw new Error("Add a seller email and phone number in Account Settings before buying a USPS label.");
   }
 
   if (!addressTo) {
@@ -214,7 +231,7 @@ function getNormalizedShippoAddresses(input: {
 export async function createShippoShipmentQuote(input: {
   order: Pick<Order, "id" | "shippingAddress">;
   listing: Pick<Listing, "category">;
-  seller: Pick<User, "name" | "buyerProfile">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
 }): Promise<ShippoShipmentQuote> {
   const { addressFrom, addressTo } = getNormalizedShippoAddresses(input);
 
@@ -282,7 +299,7 @@ export async function purchaseShippoLabelForRate(input: {
 export async function purchaseShippoLabel(input: {
   order: Pick<Order, "id" | "shippingAddress">;
   listing: Pick<Listing, "category">;
-  seller: Pick<User, "name" | "buyerProfile">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
 }): Promise<ShippoLabelPurchase> {
   const quote = await createShippoShipmentQuote(input);
   const selectedRate = quote.rates[0];
