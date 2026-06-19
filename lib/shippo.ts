@@ -242,6 +242,9 @@ export async function createShippoShipmentQuote(input: {
     body: JSON.stringify({
       address_from: addressFrom,
       address_to: addressTo,
+      extra: {
+        qr_code_requested: true
+      },
       parcels: [estimateShippoParcel(input.listing)],
       async: false,
       metadata: `order:${input.order.id}`
@@ -272,7 +275,6 @@ export async function purchaseShippoLabelForRate(input: {
       rate: input.rateId,
       async: false,
       label_file_type: "PDF",
-      qr_code_requested: true,
       metadata: `order:${input.orderId}`
     })
   });
