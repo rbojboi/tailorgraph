@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
+import { buyShippoLabelAction } from "@/app/actions";
 import { BuyerOfferFilterControl } from "@/components/buyer-offer-filter-control";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency } from "@/lib/display";
+import { isShippoConfigured } from "@/lib/shippo";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { ensureSeedData, listSellerInventory, listSellerOffers, listSellerOrders } from "@/lib/store";
 import type { OfferStatus, Order } from "@/lib/types";
@@ -106,6 +108,7 @@ export default async function SellerPage({
       ? requestedOfferStatus
       : "all";
   const stripeEnabled = isStripeConfigured();
+  const shippoEnabled = isShippoConfigured();
   let stripeAccount: Stripe.Account | null = null;
 
   if (stripeEnabled && user.stripeAccountId) {
@@ -221,13 +224,37 @@ export default async function SellerPage({
                           <span className="font-semibold text-stone-900">{order.buyerName}</span>
                         </p>
                       </div>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        <Spec label="Status" value={getSellerSaleStatus(order)} />
-                        <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
-                        <Spec label="Carrier" value={order.carrier || "Pending"} />
-                      </div>
-                    </article>
-                  ))
+                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                          <Spec label="Status" value={getSellerSaleStatus(order)} />
+                          <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
+                          <Spec label="Carrier" value={order.carrier || "Pending"} />
+                        </div>
+                        {!order.carrier ? (
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            {shippoEnabled ? (
+                              <>
+                                <Link
+                                  href={`/seller/orders/${order.id}/shippo`}
+                                  className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                                >
+                                  Compare Shippo Rates
+                                </Link>
+                                <form action={buyShippoLabelAction}>
+                                  <input type="hidden" name="orderId" value={order.id} />
+                                  <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
+                                    Buy Cheapest Label
+                                  </button>
+                                </form>
+                              </>
+                            ) : (
+                              <p className="rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                                Shippo is not configured yet.
+                              </p>
+                            )}
+                          </div>
+                        ) : null}
+                      </article>
+                    ))
                 ) : (
                   <div className="rounded-[1.5rem] border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-600">
                     No sales yet.
