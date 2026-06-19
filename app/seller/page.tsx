@@ -238,29 +238,11 @@ export default async function SellerPage({
                                   service.
                                 </p>
                               </div>
-                              {order.shippingQrCodeUrl ? (
-                                <a
-                                  href={order.shippingQrCodeUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="mt-4 block w-fit rounded-2xl border border-emerald-200 bg-white p-3 transition hover:border-emerald-700"
-                                  aria-label="Open carrier QR code"
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={order.shippingQrCodeUrl}
-                                    alt="Carrier label QR code"
-                                    className="h-32 w-32 rounded-xl bg-white object-contain"
-                                  />
-                                  <span className="mt-2 block text-center text-xs font-semibold text-emerald-950">
-                                    Open Carrier QR
-                                  </span>
-                                </a>
-                              ) : (
+                              {!order.shippingQrCodeUrl ? (
                                 <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs text-emerald-900">
                                   Carrier QR was not returned for this label. Use the PDF label instead.
                                 </p>
-                              )}
+                              ) : null}
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <Spec label="Tracking" value={order.trackingNumber || "Pending"} />
                                 <Spec
