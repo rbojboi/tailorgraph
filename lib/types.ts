@@ -493,6 +493,7 @@ export type Order = {
   trackingStatus: string | null;
   shippingEta: string | null;
   shippingLabelUrl: string | null;
+  shippingQrCodeUrl: string | null;
   shippingProvider: string | null;
   shippingProviderShipmentId: string | null;
   shippingProviderRateId: string | null;

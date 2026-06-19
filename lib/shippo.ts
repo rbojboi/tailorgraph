@@ -55,6 +55,7 @@ type ShippoTransactionResponse = {
   tracking_status?: string | null;
   tracking_url_provider?: string | null;
   label_url?: string | null;
+  qr_code_url?: string | null;
   eta?: string | null;
   messages?: Array<{ text?: string }>;
 };
@@ -66,6 +67,7 @@ export type ShippoLabelPurchase = {
   trackingStatus: string | null;
   shippingEta: string | null;
   shippingLabelUrl: string | null;
+  shippingQrCodeUrl: string | null;
   shippingProvider: "shippo";
   shippingProviderShipmentId: string | null;
   shippingProviderRateId: string | null;
@@ -270,6 +272,7 @@ export async function purchaseShippoLabelForRate(input: {
       rate: input.rateId,
       async: false,
       label_file_type: "PDF",
+      qr_code_requested: true,
       metadata: `order:${input.orderId}`
     })
   });
@@ -285,6 +288,7 @@ export async function purchaseShippoLabelForRate(input: {
     trackingStatus: transaction.tracking_status || null,
     shippingEta: transaction.eta || null,
     shippingLabelUrl: transaction.label_url || null,
+    shippingQrCodeUrl: transaction.qr_code_url || null,
     shippingProvider: "shippo",
     shippingProviderShipmentId: input.shipmentId || null,
     shippingProviderRateId: input.rateId || null,

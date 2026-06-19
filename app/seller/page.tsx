@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
-import { buyShippoLabelAction } from "@/app/actions";
+import { buyShippoLabelAction, emailSellerShipmentLabelAction } from "@/app/actions";
 import { BuyerOfferFilterControl } from "@/components/buyer-offer-filter-control";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -234,10 +234,33 @@ export default async function SellerPage({
                               <div>
                                 <p className="text-sm font-semibold text-emerald-950">Shipment label ready</p>
                                 <p className="mt-1 text-xs leading-5 text-emerald-900">
-                                  Open the label PDF to print it. The carrier barcode needed at drop-off is included on
-                                  that label.
+                                  Open the label PDF to print it, or use the carrier QR if Shippo returned one for this
+                                  service.
                                 </p>
                               </div>
+                              {order.shippingQrCodeUrl ? (
+                                <a
+                                  href={order.shippingQrCodeUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-4 block w-fit rounded-2xl border border-emerald-200 bg-white p-3 transition hover:border-emerald-700"
+                                  aria-label="Open carrier QR code"
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={order.shippingQrCodeUrl}
+                                    alt="Carrier label QR code"
+                                    className="h-32 w-32 rounded-xl bg-white object-contain"
+                                  />
+                                  <span className="mt-2 block text-center text-xs font-semibold text-emerald-950">
+                                    Open Carrier QR
+                                  </span>
+                                </a>
+                              ) : (
+                                <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs text-emerald-900">
+                                  Carrier QR was not returned for this label. Use the PDF label instead.
+                                </p>
+                              )}
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <Spec label="Tracking" value={order.trackingNumber || "Pending"} />
                                 <Spec
@@ -265,6 +288,14 @@ export default async function SellerPage({
                                   >
                                     Track Shipment
                                   </a>
+                                ) : null}
+                                {(order.shippingLabelUrl || order.shippingQrCodeUrl) && user.email ? (
+                                  <form action={emailSellerShipmentLabelAction}>
+                                    <input type="hidden" name="orderId" value={order.id} />
+                                    <button className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700">
+                                      Email Label & QR
+                                    </button>
+                                  </form>
                                 ) : null}
                               </div>
                             </div>

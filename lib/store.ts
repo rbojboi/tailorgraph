@@ -348,6 +348,7 @@ async function initSchema() {
       tracking_status TEXT,
       shipping_eta TIMESTAMPTZ,
       shipping_label_url TEXT,
+      shipping_qr_code_url TEXT,
       shipping_provider TEXT,
       shipping_provider_shipment_id TEXT,
       shipping_provider_rate_id TEXT,
@@ -538,6 +539,7 @@ async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_status TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_eta TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_label_url TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_qr_code_url TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider_shipment_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider_rate_id TEXT;
@@ -878,6 +880,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     trackingStatus: row.tracking_status ? String(row.tracking_status) : null,
     shippingEta: row.shipping_eta ? new Date(String(row.shipping_eta)).toISOString() : null,
     shippingLabelUrl: row.shipping_label_url ? String(row.shipping_label_url) : null,
+    shippingQrCodeUrl: row.shipping_qr_code_url ? String(row.shipping_qr_code_url) : null,
     shippingProvider: row.shipping_provider ? String(row.shipping_provider) : null,
     shippingProviderShipmentId: row.shipping_provider_shipment_id ? String(row.shipping_provider_shipment_id) : null,
     shippingProviderRateId: row.shipping_provider_rate_id ? String(row.shipping_provider_rate_id) : null,
@@ -2096,6 +2099,7 @@ export async function createOrder(
     | "trackingStatus"
     | "shippingEta"
     | "shippingLabelUrl"
+    | "shippingQrCodeUrl"
     | "shippingProvider"
     | "shippingProviderShipmentId"
     | "shippingProviderRateId"
@@ -2111,10 +2115,10 @@ export async function createOrder(
       payment_method, status, stripe_checkout_session_id, stripe_payment_intent_id,
       shipping_full_name, shipping_line1, shipping_line2, shipping_city, shipping_state, shipping_postal_code, shipping_country,
       shipping_method, carrier, tracking_number, tracking_url, tracking_status, shipping_eta, shipping_label_url,
-      shipping_provider, shipping_provider_shipment_id, shipping_provider_rate_id, shipping_provider_transaction_id,
+      shipping_qr_code_url, shipping_provider, shipping_provider_shipment_id, shipping_provider_rate_id, shipping_provider_transaction_id,
       issue_reason, seller_notes, shipped_at, delivered_at, created_at
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,NOW()
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,NOW()
     ) RETURNING *`,
     [
       id,
@@ -2141,6 +2145,7 @@ export async function createOrder(
       input.shippingMethod,
       input.carrier,
       input.trackingNumber,
+      null,
       null,
       null,
       null,
@@ -2180,6 +2185,7 @@ export async function updateOrderShipping(
          tracking_status = NULL,
          shipping_eta = NULL,
          shipping_label_url = NULL,
+         shipping_qr_code_url = NULL,
          shipping_provider = NULL,
          shipping_provider_shipment_id = NULL,
          shipping_provider_rate_id = NULL,
@@ -2199,6 +2205,7 @@ export async function updateOrderShippingWithProvider(
     trackingStatus: string | null;
     shippingEta: string | null;
     shippingLabelUrl: string | null;
+    shippingQrCodeUrl: string | null;
     shippingProvider: string;
     shippingProviderShipmentId: string | null;
     shippingProviderRateId: string | null;
@@ -2216,13 +2223,14 @@ export async function updateOrderShippingWithProvider(
          tracking_status = $4,
          shipping_eta = $5,
          shipping_label_url = $6,
-         shipping_provider = $7,
-         shipping_provider_shipment_id = $8,
-         shipping_provider_rate_id = $9,
-         shipping_provider_transaction_id = $10,
-         seller_notes = $11,
+         shipping_qr_code_url = $7,
+         shipping_provider = $8,
+         shipping_provider_shipment_id = $9,
+         shipping_provider_rate_id = $10,
+         shipping_provider_transaction_id = $11,
+         seller_notes = $12,
          shipped_at = NOW()
-     WHERE id = $12`,
+     WHERE id = $13`,
     [
       input.carrier,
       input.trackingNumber,
@@ -2230,6 +2238,7 @@ export async function updateOrderShippingWithProvider(
       input.trackingStatus,
       input.shippingEta,
       input.shippingLabelUrl,
+      input.shippingQrCodeUrl,
       input.shippingProvider,
       input.shippingProviderShipmentId,
       input.shippingProviderRateId,

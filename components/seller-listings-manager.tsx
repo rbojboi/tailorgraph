@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
   buyShippoLabelAction,
+  emailSellerShipmentLabelAction,
   resolveIssueAction,
   shipOrderAction,
   updateListingStatusAction
@@ -156,16 +157,28 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
         <Spec label="Tracking" value={order.trackingNumber || "Not added"} />
       </div>
 
-      {order.shippingLabelUrl ? (
+      {order.shippingLabelUrl || order.shippingQrCodeUrl ? (
         <div className="mt-4 flex flex-wrap gap-3">
-          <a
-            href={order.shippingLabelUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
-          >
-            Open Shipping Label
-          </a>
+          {order.shippingLabelUrl ? (
+            <a
+              href={order.shippingLabelUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+            >
+              Open Shipping Label
+            </a>
+          ) : null}
+          {order.shippingQrCodeUrl ? (
+            <a
+              href={order.shippingQrCodeUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+            >
+              Open Carrier QR
+            </a>
+          ) : null}
           {order.trackingUrl ? (
             <a
               href={order.trackingUrl}
@@ -176,6 +189,12 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
               Open Tracking
             </a>
           ) : null}
+          <form action={emailSellerShipmentLabelAction}>
+            <input type="hidden" name="orderId" value={order.id} />
+            <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+              Email Label & QR
+            </button>
+          </form>
         </div>
       ) : null}
 

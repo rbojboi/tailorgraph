@@ -576,6 +576,62 @@ function shipmentBuyerEmail(context: OrderNotificationContext) {
   };
 }
 
+function shipmentSellerEmail(context: OrderNotificationContext) {
+  const { order, buyer } = context;
+  const sellerUrl = `${getAppUrl()}/seller`;
+  const tracking = order.trackingNumber ? `${order.carrier || "Carrier"} - ${order.trackingNumber}` : "Tracking pending";
+  const qrHtml = order.shippingQrCodeUrl
+    ? `<div style="margin:20px 0 0;padding:18px;border-radius:20px;background:#fbf8f4;border:1px solid #e4dbcf">
+        <p style="margin:0 0 12px;color:#44403c;font-size:15px;line-height:1.6">If this carrier accepts QR drop-off, show this code at the counter so they can print/scan the label.</p>
+        <a href="${escapeHtml(order.shippingQrCodeUrl)}" style="display:inline-block">
+          <img src="${escapeHtml(order.shippingQrCodeUrl)}" alt="Carrier label QR code" style="display:block;width:180px;max-width:100%;height:auto;border-radius:16px;border:1px solid #e4dbcf;background:#fff" />
+        </a>
+      </div>`
+    : "";
+
+  return {
+    subject: `TailorGraph shipping label ready: ${order.listingTitle}`,
+    text: `Your TailorGraph shipping label is ready.\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTracking: ${tracking}\nLabel PDF: ${order.shippingLabelUrl || "Not available"}\nCarrier QR: ${order.shippingQrCodeUrl || "Not available for this label"}\n\nSeller dashboard: ${sellerUrl}`,
+    html: renderEmailLayout({
+      eyebrow: "Seller Orders",
+      title: "Shipping label ready",
+      introParagraphs: [
+        "Your carrier label has been purchased.",
+        order.shippingQrCodeUrl
+          ? "Use the PDF if you want to print the label, or use the QR code if the carrier counter accepts QR drop-off."
+          : "Use the PDF to print the label. Shippo did not return a carrier QR code for this label."
+      ],
+      bodyHtml: qrHtml,
+      details: [
+        { label: "Item", value: order.listingTitle },
+        { label: "Buyer", value: buyer.name },
+        { label: "Tracking", value: tracking },
+        { label: "QR", value: order.shippingQrCodeUrl ? "Available" : "Not available for this label" }
+      ],
+      primaryAction: order.shippingLabelUrl
+        ? {
+            label: "Open Label PDF",
+            url: order.shippingLabelUrl
+          }
+        : {
+            label: "Open Seller Dashboard",
+            url: sellerUrl
+          },
+      secondaryAction: order.shippingQrCodeUrl
+        ? {
+            label: "Open Carrier QR",
+            url: order.shippingQrCodeUrl
+          }
+        : order.trackingUrl
+          ? {
+              label: "Track Shipment",
+              url: order.trackingUrl
+            }
+          : undefined
+    })
+  };
+}
+
 function shipmentBuyerSms(context: OrderNotificationContext) {
   const { order } = context;
   return `TailorGraph: your order for "${order.listingTitle}" has shipped.${order.trackingNumber ? ` Tracking: ${order.trackingNumber}.` : ""} View updates in My Purchases.`;
@@ -780,6 +836,25 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
       body: shipmentBuyerSms(context)
     });
   }
+
+  if (context.order.shippingLabelUrl || context.order.shippingQrCodeUrl) {
+    await sendSellerShipmentLabelNotification(context);
+  }
+}
+
+export async function sendSellerShipmentLabelNotification(
+  context: OrderNotificationContext,
+  options?: { eventKey?: string; skipDedupe?: boolean }
+) {
+  const sellerEmail = shipmentSellerEmail(context);
+  await sendEmailNotification({
+    eventKey: options?.eventKey ?? `shipment:${context.order.id}:seller_label_email`,
+    eventType: "seller_shipment_label",
+    to: context.seller.email,
+    category: "seller_orders",
+    skipDedupe: options?.skipDedupe,
+    ...sellerEmail
+  });
 }
 
 export async function sendDirectMessageNotification(context: DirectMessageNotificationContext) {

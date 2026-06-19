@@ -90,6 +90,7 @@ import {
   sendOrderShippedNotifications,
   sendPasswordResetNotification,
   sendSenderTestNotification,
+  sendSellerShipmentLabelNotification,
   sendSupportRequestNotifications,
   sendWelcomeNotification
 } from "@/lib/notifications";
@@ -3484,6 +3485,7 @@ export async function buyShippoLabelAction(formData: FormData) {
     trackingStatus: purchasedLabel.trackingStatus,
     shippingEta: purchasedLabel.shippingEta,
     shippingLabelUrl: purchasedLabel.shippingLabelUrl,
+    shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
     shippingProvider: purchasedLabel.shippingProvider,
     shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
     shippingProviderRateId: purchasedLabel.shippingProviderRateId,
@@ -3503,6 +3505,7 @@ export async function buyShippoLabelAction(formData: FormData) {
         trackingStatus: purchasedLabel.trackingStatus,
         shippingEta: purchasedLabel.shippingEta,
         shippingLabelUrl: purchasedLabel.shippingLabelUrl,
+        shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
         shippingProvider: purchasedLabel.shippingProvider,
         shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
         shippingProviderRateId: purchasedLabel.shippingProviderRateId,
@@ -3576,6 +3579,7 @@ export async function buySelectedShippoRateAction(formData: FormData) {
     trackingStatus: purchasedLabel.trackingStatus,
     shippingEta: purchasedLabel.shippingEta,
     shippingLabelUrl: purchasedLabel.shippingLabelUrl,
+    shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
     shippingProvider: purchasedLabel.shippingProvider,
     shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
     shippingProviderRateId: purchasedLabel.shippingProviderRateId,
@@ -3595,6 +3599,7 @@ export async function buySelectedShippoRateAction(formData: FormData) {
         trackingStatus: purchasedLabel.trackingStatus,
         shippingEta: purchasedLabel.shippingEta,
         shippingLabelUrl: purchasedLabel.shippingLabelUrl,
+        shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
         shippingProvider: purchasedLabel.shippingProvider,
         shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
         shippingProviderRateId: purchasedLabel.shippingProviderRateId,
@@ -3611,6 +3616,44 @@ export async function buySelectedShippoRateAction(formData: FormData) {
   revalidatePath("/seller");
   revalidatePath("/buyer");
   redirect("/seller?saved=shippo-rate");
+}
+
+export async function emailSellerShipmentLabelAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+email+shipment+labels");
+  const user = await getCurrentUser();
+  if (!user || (user.role !== "seller" && user.role !== "both")) {
+    redirect("/?authError=Seller+account+required");
+  }
+
+  const orderId = stringValue(formData, "orderId");
+  const order = await findOrderById(orderId);
+  if (!order || order.sellerId !== user.id) {
+    redirect("/seller?authError=Order+not+found");
+  }
+
+  if (!order.shippingLabelUrl && !order.shippingQrCodeUrl) {
+    redirect("/seller?authError=No+Shippo+label+or+QR+is+available+for+this+order+yet");
+  }
+
+  const [buyer, listing] = await Promise.all([findUserById(order.buyerId), findListingById(order.listingId)]);
+  if (!buyer) {
+    redirect("/seller?authError=Buyer+account+not+found+for+this+order");
+  }
+
+  await sendSellerShipmentLabelNotification(
+    {
+      order,
+      listing,
+      buyer,
+      seller: user
+    },
+    {
+      eventKey: `shipment:${order.id}:seller_label_email:${randomUUID()}`,
+      skipDedupe: true
+    }
+  );
+
+  redirect("/seller?saved=shipment-email");
 }
 
 export async function confirmDeliveryAction(formData: FormData) {

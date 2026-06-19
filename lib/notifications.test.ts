@@ -37,6 +37,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     trackingStatus: null,
     shippingEta: null,
     shippingLabelUrl: null,
+    shippingQrCodeUrl: null,
     shippingProvider: null,
     shippingProviderShipmentId: null,
     shippingProviderRateId: null,
