@@ -178,7 +178,11 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
             >
               Open Carrier QR
             </a>
-          ) : null}
+          ) : (
+            <span className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-600">
+              Carrier QR unavailable
+            </span>
+          )}
           {order.trackingUrl ? (
             <a
               href={order.trackingUrl}
@@ -192,7 +196,7 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
           <form action={emailSellerShipmentLabelAction}>
             <input type="hidden" name="orderId" value={order.id} />
             <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
-              Email Label & QR
+              {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
             </button>
           </form>
         </div>

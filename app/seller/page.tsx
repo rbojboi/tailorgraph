@@ -289,6 +289,11 @@ export default async function SellerPage({
                                     Open Carrier QR
                                   </a>
                                 ) : null}
+                                {!order.shippingQrCodeUrl ? (
+                                  <span className="rounded-full border border-emerald-200 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
+                                    Carrier QR unavailable
+                                  </span>
+                                ) : null}
                                 {order.trackingUrl ? (
                                   <a
                                     href={order.trackingUrl}
@@ -303,7 +308,7 @@ export default async function SellerPage({
                                   <form action={emailSellerShipmentLabelAction}>
                                     <input type="hidden" name="orderId" value={order.id} />
                                     <button className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700">
-                                      Email Label & QR
+                                      {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
                                     </button>
                                   </form>
                                 ) : null}
