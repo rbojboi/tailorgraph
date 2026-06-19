@@ -1020,6 +1020,7 @@ function isStripeConnectPlatformSetupError(error: unknown) {
 }
 
 const SELLER_PAYOUT_REQUIRED_MESSAGE = "Complete Stripe Connect payouts before publishing listings.";
+const PLATFORM_FEE_RATE = 0.1;
 
 async function isSellerPayoutReady(seller: Pick<User, "id" | "stripeAccountId" | "stripeOnboardingComplete"> | null) {
   if (!seller?.stripeAccountId || !isStripeConfigured()) {
@@ -1049,6 +1050,14 @@ async function redirectIfSellerPayoutsMissing(
   }
 
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(SELLER_PAYOUT_REQUIRED_MESSAGE)}`);
+}
+
+function dollarsToCents(amount: number) {
+  return Math.max(0, Math.round(amount * 100));
+}
+
+function getSellerTransferAmountCents(itemSubtotal: number) {
+  return Math.max(0, dollarsToCents(itemSubtotal * (1 - PLATFORM_FEE_RATE)));
 }
 
 function validatePublishedListing(formData: FormData, category: string, mediaCount: number) {
@@ -3154,7 +3163,7 @@ export async function startStripeCheckoutAction(formData: FormData) {
   }
 
   const destinationAccount = seller?.stripeAccountId ?? null;
-  const applicationFeeAmount = destinationAccount ? Math.round(listing.price * 100 * 0.1) : undefined;
+  const sellerTransferAmount = destinationAccount ? getSellerTransferAmountCents(listing.price) : undefined;
   const shippingAmount = listing.shippingPrice;
 
   const order = await createOrder({
@@ -3218,19 +3227,19 @@ export async function startStripeCheckoutAction(formData: FormData) {
     shipping_address_collection: {
       allowed_countries: ["US", "CA"]
     },
-    metadata: {
-      orderId: order.id,
-      listingId: listing.id
-    },
-    payment_intent_data:
-      destinationAccount && applicationFeeAmount
-        ? {
-            application_fee_amount: applicationFeeAmount,
+      metadata: {
+        orderId: order.id,
+        listingId: listing.id
+      },
+      payment_intent_data:
+        destinationAccount && sellerTransferAmount
+          ? {
             transfer_data: {
-              destination: destinationAccount
+              destination: destinationAccount,
+              amount: sellerTransferAmount
             }
           }
-        : undefined
+          : undefined
   });
 
   await attachStripeSessionToOrder(order.id, session.id);
@@ -3297,9 +3306,8 @@ export async function startCartStripeCheckoutAction(formData: FormData) {
   }
 
   const destinationAccount = seller?.stripeAccountId ?? null;
-  const applicationFeeAmount = destinationAccount
-    ? Math.round(listings.reduce((sum, listing) => sum + listing.price, 0) * 100 * 0.1)
-    : undefined;
+  const itemSubtotal = listings.reduce((sum, listing) => sum + listing.price, 0);
+  const sellerTransferAmount = destinationAccount ? getSellerTransferAmountCents(itemSubtotal) : undefined;
 
   const orders = await Promise.all(
     listings.map(async (listing) => {
@@ -3368,18 +3376,18 @@ export async function startCartStripeCheckoutAction(formData: FormData) {
     shipping_address_collection: {
       allowed_countries: ["US", "CA"]
     },
-    metadata: {
-      cartOrderIds: orders.map((order) => order.id).join(",")
-    },
-    payment_intent_data:
-      destinationAccount && applicationFeeAmount
-        ? {
-            application_fee_amount: applicationFeeAmount,
+      metadata: {
+        cartOrderIds: orders.map((order) => order.id).join(",")
+      },
+      payment_intent_data:
+        destinationAccount && sellerTransferAmount
+          ? {
             transfer_data: {
-              destination: destinationAccount
+              destination: destinationAccount,
+              amount: sellerTransferAmount
             }
           }
-        : undefined
+          : undefined
   });
 
   await Promise.all(orders.map((order) => attachStripeSessionToOrder(order.id, session.id)));
