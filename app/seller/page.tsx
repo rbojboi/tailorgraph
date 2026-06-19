@@ -5,7 +5,7 @@ import { buyShippoLabelAction } from "@/app/actions";
 import { BuyerOfferFilterControl } from "@/components/buyer-offer-filter-control";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
-import { formatCurrency } from "@/lib/display";
+import { formatCurrency, formatDisplayValue } from "@/lib/display";
 import { isShippoConfigured } from "@/lib/shippo";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { ensureSeedData, listSellerInventory, listSellerOffers, listSellerOrders } from "@/lib/store";
@@ -224,15 +224,54 @@ export default async function SellerPage({
                           <span className="font-semibold text-stone-900">{order.buyerName}</span>
                         </p>
                       </div>
-                        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                          <Spec label="Status" value={getSellerSaleStatus(order)} />
-                          <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
-                          <Spec label="Carrier" value={order.carrier || "Pending"} />
-                        </div>
-                        {!order.carrier ? (
-                          <div className="mt-4 flex flex-wrap gap-2">
-                            {shippoEnabled ? (
-                              <>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                            <Spec label="Status" value={getSellerSaleStatus(order)} />
+                            <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
+                            <Spec label="Carrier" value={order.carrier || "Pending"} />
+                          </div>
+                          {order.carrier ? (
+                            <div className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 p-4">
+                              <div>
+                                <p className="text-sm font-semibold text-emerald-950">Shipment label ready</p>
+                                <p className="mt-1 text-xs leading-5 text-emerald-900">
+                                  Open the label PDF to print it. The carrier barcode needed at drop-off is included on
+                                  that label.
+                                </p>
+                              </div>
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <Spec label="Tracking" value={order.trackingNumber || "Pending"} />
+                                <Spec
+                                  label="Tracking Status"
+                                  value={order.trackingStatus ? formatDisplayValue(order.trackingStatus) : "Pending"}
+                                />
+                              </div>
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {order.shippingLabelUrl ? (
+                                  <a
+                                    href={order.shippingLabelUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
+                                  >
+                                    Open Label PDF
+                                  </a>
+                                ) : null}
+                                {order.trackingUrl ? (
+                                  <a
+                                    href={order.trackingUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                  >
+                                    Track Shipment
+                                  </a>
+                                ) : null}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              {shippoEnabled ? (
+                                <>
                                 <Link
                                   href={`/seller/orders/${order.id}/shippo`}
                                   className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
@@ -249,12 +288,12 @@ export default async function SellerPage({
                             ) : (
                               <p className="rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
                                 Shippo is not configured yet.
-                              </p>
-                            )}
-                          </div>
-                        ) : null}
-                      </article>
-                    ))
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </article>
+                      ))
                 ) : (
                   <div className="rounded-[1.5rem] border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-600">
                     No sales yet.
