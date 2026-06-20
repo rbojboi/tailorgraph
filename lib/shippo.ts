@@ -230,6 +230,42 @@ function getNormalizedShippoAddresses(input: {
   return { addressFrom, addressTo };
 }
 
+function getNormalizedShippoReturnAddresses(input: {
+  order: Pick<Order, "id" | "shippingAddress">;
+  buyer: Pick<User, "name" | "email" | "phoneNumber">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
+}) {
+  const sellerReturnSource = getSellerShipFromAddress(input.seller);
+  const addressFrom = normalizeShippoAddress(input.order.shippingAddress, input.buyer.name, {
+    email: input.buyer.email,
+    phone: input.buyer.phoneNumber
+  });
+  const addressTo = sellerReturnSource
+    ? normalizeShippoAddress(sellerReturnSource, input.seller.name, {
+        email: input.seller.email,
+        phone: input.seller.phoneNumber
+      })
+    : null;
+
+  if (!addressFrom) {
+    throw new Error("The buyer shipping address is incomplete, so a return label cannot be created yet.");
+  }
+
+  if (!addressFrom.email || !addressFrom.phone) {
+    throw new Error("Add the buyer email and phone number before buying a USPS return label.");
+  }
+
+  if (!addressTo) {
+    throw new Error("Add a saved seller return address in Account Settings before buying a return label.");
+  }
+
+  if (!addressTo.email || !addressTo.phone) {
+    throw new Error("Add a seller email and phone number in Account Settings before buying a USPS return label.");
+  }
+
+  return { addressFrom, addressTo };
+}
+
 export async function createShippoShipmentQuote(input: {
   order: Pick<Order, "id" | "shippingAddress">;
   listing: Pick<Listing, "category">;
@@ -313,6 +349,44 @@ export async function purchaseShippoLabel(input: {
   return purchaseShippoLabelForRate({
     orderId: input.order.id,
     shipmentId: quote.shipmentId,
+    rateId: selectedRate.rateId,
+    rate: selectedRate
+  });
+}
+
+export async function purchaseShippoReturnLabel(input: {
+  order: Pick<Order, "id" | "shippingAddress">;
+  listing: Pick<Listing, "category">;
+  buyer: Pick<User, "name" | "email" | "phoneNumber">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
+}): Promise<ShippoLabelPurchase> {
+  const { addressFrom, addressTo } = getNormalizedShippoReturnAddresses(input);
+
+  const shipment = await shippoRequest<ShippoShipmentResponse>("/shipments/", {
+    method: "POST",
+    body: JSON.stringify({
+      address_from: addressFrom,
+      address_to: addressTo,
+      extra: {
+        qr_code_requested: true
+      },
+      parcels: [estimateShippoParcel(input.listing)],
+      async: false,
+      metadata: `order:${input.order.id}:return`
+    })
+  });
+
+  const rates = (shipment.rates || []).map(mapRateOption).filter((rate) => rate.amount !== null);
+
+  if (!rates.length) {
+    throw new Error(formatShippoErrors(shipment.messages));
+  }
+
+  const selectedRate = rates.sort((left, right) => (left.amount ?? 0) - (right.amount ?? 0))[0];
+
+  return purchaseShippoLabelForRate({
+    orderId: input.order.id,
+    shipmentId: shipment.object_id,
     rateId: selectedRate.rateId,
     rate: selectedRate
   });

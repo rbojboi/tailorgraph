@@ -498,6 +498,17 @@ export type Order = {
   shippingProviderShipmentId: string | null;
   shippingProviderRateId: string | null;
   shippingProviderTransactionId: string | null;
+  returnCarrier: string | null;
+  returnTrackingNumber: string | null;
+  returnTrackingUrl: string | null;
+  returnTrackingStatus: string | null;
+  returnEta: string | null;
+  returnLabelUrl: string | null;
+  returnQrCodeUrl: string | null;
+  returnProvider: string | null;
+  returnProviderShipmentId: string | null;
+  returnProviderRateId: string | null;
+  returnProviderTransactionId: string | null;
   issueReason: string | null;
   sellerNotes: string | null;
   shippedAt: string | null;

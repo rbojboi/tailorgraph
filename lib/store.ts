@@ -353,6 +353,17 @@ async function initSchema() {
       shipping_provider_shipment_id TEXT,
       shipping_provider_rate_id TEXT,
       shipping_provider_transaction_id TEXT,
+      return_carrier TEXT,
+      return_tracking_number TEXT,
+      return_tracking_url TEXT,
+      return_tracking_status TEXT,
+      return_eta TIMESTAMPTZ,
+      return_label_url TEXT,
+      return_qr_code_url TEXT,
+      return_provider TEXT,
+      return_provider_shipment_id TEXT,
+      return_provider_rate_id TEXT,
+      return_provider_transaction_id TEXT,
       issue_reason TEXT,
       seller_notes TEXT,
       shipped_at TIMESTAMPTZ,
@@ -544,6 +555,17 @@ async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider_shipment_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider_rate_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_provider_transaction_id TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_carrier TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_tracking_number TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_tracking_url TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_tracking_status TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_eta TIMESTAMPTZ;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_label_url TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_qr_code_url TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_shipment_id TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_rate_id TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_transaction_id TEXT;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS measurement_rating INTEGER;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS condition_rating INTEGER;
   `);
@@ -887,6 +909,17 @@ function mapOrder(row: Record<string, unknown>): Order {
     shippingProviderTransactionId: row.shipping_provider_transaction_id
       ? String(row.shipping_provider_transaction_id)
       : null,
+    returnCarrier: row.return_carrier ? String(row.return_carrier) : null,
+    returnTrackingNumber: row.return_tracking_number ? String(row.return_tracking_number) : null,
+    returnTrackingUrl: row.return_tracking_url ? String(row.return_tracking_url) : null,
+    returnTrackingStatus: row.return_tracking_status ? String(row.return_tracking_status) : null,
+    returnEta: row.return_eta ? new Date(String(row.return_eta)).toISOString() : null,
+    returnLabelUrl: row.return_label_url ? String(row.return_label_url) : null,
+    returnQrCodeUrl: row.return_qr_code_url ? String(row.return_qr_code_url) : null,
+    returnProvider: row.return_provider ? String(row.return_provider) : null,
+    returnProviderShipmentId: row.return_provider_shipment_id ? String(row.return_provider_shipment_id) : null,
+    returnProviderRateId: row.return_provider_rate_id ? String(row.return_provider_rate_id) : null,
+    returnProviderTransactionId: row.return_provider_transaction_id ? String(row.return_provider_transaction_id) : null,
     issueReason: row.issue_reason ? String(row.issue_reason) : null,
     sellerNotes: row.seller_notes ? String(row.seller_notes) : null,
     shippedAt: row.shipped_at ? new Date(String(row.shipped_at)).toISOString() : null,
@@ -2104,6 +2137,17 @@ export async function createOrder(
     | "shippingProviderShipmentId"
     | "shippingProviderRateId"
     | "shippingProviderTransactionId"
+    | "returnCarrier"
+    | "returnTrackingNumber"
+    | "returnTrackingUrl"
+    | "returnTrackingStatus"
+    | "returnEta"
+    | "returnLabelUrl"
+    | "returnQrCodeUrl"
+    | "returnProvider"
+    | "returnProviderShipmentId"
+    | "returnProviderRateId"
+    | "returnProviderTransactionId"
   >
 ): Promise<Order> {
   await ensureSchema();
@@ -2243,6 +2287,61 @@ export async function updateOrderShippingWithProvider(
       input.shippingProviderShipmentId,
       input.shippingProviderRateId,
       input.shippingProviderTransactionId,
+      input.sellerNotes,
+      orderId
+    ]
+  );
+}
+
+export async function updateOrderReturnShippingWithProvider(
+  orderId: string,
+  input: {
+    carrier: string;
+    trackingNumber: string;
+    trackingUrl: string | null;
+    trackingStatus: string | null;
+    returnEta: string | null;
+    returnLabelUrl: string | null;
+    returnQrCodeUrl: string | null;
+    returnProvider: string;
+    returnProviderShipmentId: string | null;
+    returnProviderRateId: string | null;
+    returnProviderTransactionId: string | null;
+    sellerNotes: string | null;
+  }
+): Promise<void> {
+  await ensureSchema();
+  await requirePool().query(
+    `UPDATE orders
+     SET return_carrier = $1,
+         return_tracking_number = $2,
+         return_tracking_url = $3,
+         return_tracking_status = $4,
+         return_eta = $5,
+         return_label_url = $6,
+         return_qr_code_url = $7,
+         return_provider = $8,
+         return_provider_shipment_id = $9,
+         return_provider_rate_id = $10,
+         return_provider_transaction_id = $11,
+         seller_notes = COALESCE($12, seller_notes),
+         status = CASE
+           WHEN status NOT IN ('canceled', 'refunded', 'failed') THEN 'issue_open'
+           ELSE status
+         END
+     WHERE id = $13`,
+    [
+      input.carrier,
+      input.trackingNumber,
+      input.trackingUrl,
+      input.trackingStatus,
+      input.returnEta,
+      input.returnLabelUrl,
+      input.returnQrCodeUrl,
+      input.returnProvider,
+      input.returnProviderShipmentId,
+      input.returnProviderRateId,
+      input.returnProviderTransactionId,
       input.sellerNotes,
       orderId
     ]

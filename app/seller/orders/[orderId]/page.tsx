@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   buyShippoLabelAction,
+  buyShippoReturnLabelAction,
   emailSellerShipmentLabelAction,
   shipOrderAction
 } from "@/app/actions";
@@ -27,6 +28,8 @@ function sellerOrderSavedMessage(saved: string) {
   switch (saved) {
     case "shipment-email":
       return "Shipment Label & QR Sent to Email.";
+    case "return-label":
+      return "Return Label & QR Created.";
     default:
       return `Saved ${saved}.`;
   }
@@ -82,7 +85,10 @@ export default async function SellerOrderFulfillmentPage({
   const saved = firstValue(query.saved);
   const authError = firstValue(query.authError);
   const hasProviderLabel = Boolean(order.shippingLabelUrl || order.shippingQrCodeUrl);
+  const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
+  const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
   const canBuyLabel = !order.carrier && (order.status === "paid" || order.status === "processing");
+  const canBuyReturnLabel = returnFlowActive && order.returnsAccepted && !hasReturnProviderLabel && shippoEnabled;
 
   return (
     <AppShell>
@@ -226,6 +232,106 @@ export default async function SellerOrderFulfillmentPage({
                     <Spec label="Shipped" value={formatDateLabel(order.shippedAt)} />
                   </div>
                 </div>
+
+                {returnFlowActive ? (
+                  <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
+                    <p className="text-sm font-semibold text-amber-950">Return Materials</p>
+                    <p className="mt-2 text-sm leading-6 text-amber-900">
+                      Buyer-to-seller return label details for this issue or return request.
+                    </p>
+
+                    {order.issueReason ? (
+                      <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
+                        Reason: {order.issueReason}
+                      </p>
+                    ) : null}
+
+                    {canBuyReturnLabel ? (
+                      <form action={buyShippoReturnLabelAction} className="mt-4 rounded-[1.25rem] border border-amber-200 bg-white p-4">
+                        <input type="hidden" name="orderId" value={order.id} />
+                        <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
+                        <p className="text-sm font-semibold text-stone-950">Buy return label</p>
+                        <p className="mt-2 text-sm leading-6 text-stone-700">
+                          Purchases the cheapest Shippo label from the buyer address back to your saved seller return address.
+                        </p>
+                        <Input name="sellerNotes" label="Seller notes" defaultValue={order.sellerNotes || ""} type="text" />
+                        <button className="mt-4 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
+                          Buy Return Label
+                        </button>
+                      </form>
+                    ) : null}
+
+                    {returnFlowActive && !order.returnsAccepted ? (
+                      <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
+                        This order was not marked return-eligible when listed.
+                      </p>
+                    ) : null}
+
+                    {returnFlowActive && order.returnsAccepted && !shippoEnabled ? (
+                      <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
+                        Add `SHIPPO_API_TOKEN` to enable Shippo return labels.
+                      </p>
+                    ) : null}
+
+                    {hasReturnProviderLabel ? (
+                      <>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {order.returnLabelUrl ? (
+                            <a
+                              href={order.returnLabelUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={shipmentMaterialButtonClass}
+                            >
+                              Open Return Label PDF
+                            </a>
+                          ) : null}
+                          {order.returnQrCodeUrl ? (
+                            <a
+                              href={order.returnQrCodeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={shipmentMaterialButtonClass}
+                            >
+                              Open Return Carrier QR
+                            </a>
+                          ) : (
+                            <span className="rounded-full border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900">
+                              Return QR unavailable
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <Spec label="Return Carrier" value={order.returnCarrier || "Pending"} />
+                          <div className="rounded-2xl bg-white px-3 py-3">
+                            <p className="text-xs uppercase tracking-wide text-stone-500">Return Tracking</p>
+                            {order.returnTrackingNumber ? (
+                              order.returnTrackingUrl ? (
+                                <a
+                                  href={order.returnTrackingUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-1 block text-sm font-semibold text-[var(--accent)] transition hover:text-stone-950"
+                                >
+                                  {order.returnTrackingNumber}
+                                </a>
+                              ) : (
+                                <p className="mt-1 text-sm font-semibold text-stone-900">{order.returnTrackingNumber}</p>
+                              )
+                            ) : (
+                              <p className="mt-1 text-sm font-semibold text-stone-900">Pending</p>
+                            )}
+                          </div>
+                          <Spec
+                            label="Return Tracking Status"
+                            value={order.returnTrackingStatus ? formatDisplayValue(order.returnTrackingStatus) : "Pending"}
+                          />
+                          <Spec label="Return ETA" value={formatDateLabel(order.returnEta)} />
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="mt-5 grid gap-4">

@@ -68,6 +68,7 @@ import {
   updateListing,
   updateBuyerAccount,
   updateOrderIssue,
+  updateOrderReturnShippingWithProvider,
   updateOrderShipping,
   updateOrderShippingWithProvider,
   updateSellerLocation,
@@ -94,7 +95,7 @@ import {
   sendSupportRequestNotifications,
   sendWelcomeNotification
 } from "@/lib/notifications";
-import { purchaseShippoLabel, purchaseShippoLabelForRate } from "@/lib/shippo";
+import { purchaseShippoLabel, purchaseShippoLabelForRate, purchaseShippoReturnLabel } from "@/lib/shippo";
 import { estimateShippingCost, estimateTailoringDistanceFromSellerLocation } from "@/lib/shipping";
 import { combineSplitSize } from "@/lib/sizing";
 import { resolveUsZipCode, sanitizeZipCode } from "@/lib/zip";
@@ -3617,6 +3618,69 @@ export async function buySelectedShippoRateAction(formData: FormData) {
   revalidatePath("/seller");
   revalidatePath("/buyer");
   redirect("/seller?saved=shippo-rate");
+}
+
+export async function buyShippoReturnLabelAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+manage+returns");
+  const user = await getCurrentUser();
+  if (!user || (user.role !== "seller" && user.role !== "both")) {
+    redirect("/?authError=Seller+account+required");
+  }
+
+  const orderId = stringValue(formData, "orderId");
+  const returnTo = stringValue(formData, "returnTo") || `/seller/orders/${orderId}`;
+  const sellerNotes = stringValue(formData, "sellerNotes") || null;
+  const order = await findOrderById(orderId);
+
+  if (!order || order.sellerId !== user.id) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
+  }
+
+  if (!order.returnsAccepted) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
+  }
+
+  const [listing, buyer] = await Promise.all([findListingById(order.listingId), findUserById(order.buyerId)]);
+  if (!listing) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Listing+not+found+for+this+order`);
+  }
+
+  if (!buyer) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Buyer+account+not+found+for+this+order`);
+  }
+
+  let purchasedLabel;
+  try {
+    purchasedLabel = await purchaseShippoReturnLabel({
+      order,
+      listing,
+      buyer,
+      seller: user
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Shippo could not create a return label for this order.";
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(message)}`);
+  }
+
+  await updateOrderReturnShippingWithProvider(orderId, {
+    carrier: purchasedLabel.carrier,
+    trackingNumber: purchasedLabel.trackingNumber,
+    trackingUrl: purchasedLabel.trackingUrl,
+    trackingStatus: purchasedLabel.trackingStatus,
+    returnEta: purchasedLabel.shippingEta,
+    returnLabelUrl: purchasedLabel.shippingLabelUrl,
+    returnQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
+    returnProvider: purchasedLabel.shippingProvider,
+    returnProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
+    returnProviderRateId: purchasedLabel.shippingProviderRateId,
+    returnProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
+    sellerNotes
+  });
+
+  revalidatePath("/seller");
+  revalidatePath(`/seller/orders/${orderId}`);
+  revalidatePath("/buyer/orders");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
 }
 
 export async function emailSellerShipmentLabelAction(formData: FormData) {
