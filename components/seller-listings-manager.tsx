@@ -195,7 +195,15 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
           ) : null}
           <form action={emailSellerShipmentLabelAction}>
             <input type="hidden" name="orderId" value={order.id} />
-            <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+            <button
+              className="inline-flex appearance-none items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-stone-900 transition hover:border-stone-950"
+              style={{
+                fontFamily: "inherit",
+                fontSize: "0.875rem",
+                fontWeight: 600,
+                lineHeight: "1.25rem"
+              }}
+            >
               {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
             </button>
           </form>
