@@ -206,7 +206,11 @@ export default async function SellerPage({
             <div className="mt-5 max-h-[33rem] overflow-y-auto pr-2">
               <div className="grid gap-3">
                 {sales.length ? (
-                  sales.map((order) => (
+                  sales.map((order) => {
+                    const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
+                    const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
+
+                    return (
                     <article key={order.id} className="rounded-[1.5rem] border border-stone-300 bg-white p-4">
                       <div>
                         <Link href={`/listings/${order.listingId}`} className="text-sm font-semibold text-stone-950 transition hover:text-[var(--accent)]">
@@ -218,6 +222,26 @@ export default async function SellerPage({
                           <span className="font-semibold text-stone-900">{order.buyerName}</span>
                         </p>
                       </div>
+                      {returnFlowActive ? (
+                        <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-50 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-amber-950">
+                                {hasReturnProviderLabel ? "Return label ready" : "Return requested"}
+                              </p>
+                              <p className="mt-1 text-sm leading-6 text-amber-900">
+                                {order.issueReason || "This order has an active return or issue request."}
+                              </p>
+                            </div>
+                            <Link
+                              href={`/seller/orders/${order.id}`}
+                              className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
+                            >
+                              Review Return
+                            </Link>
+                          </div>
+                        </div>
+                      ) : null}
                           <div className="mt-3 grid gap-3 sm:grid-cols-3">
                             <Spec label="Status" value={getSellerOrderStatusLabel(order)} />
                             <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
@@ -319,7 +343,8 @@ export default async function SellerPage({
                             </div>
                           )}
                         </article>
-                      ))
+                      );
+                    })
                 ) : (
                   <div className="rounded-[1.5rem] border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-600">
                     No sales yet.

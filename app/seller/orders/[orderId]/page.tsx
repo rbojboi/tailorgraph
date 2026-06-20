@@ -117,6 +117,30 @@ export default async function SellerOrderFulfillmentPage({
             </p>
           ) : null}
 
+          {returnFlowActive ? (
+            <div className="mt-5 rounded-[1.5rem] border border-amber-300 bg-amber-50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="eyebrow text-xs text-amber-800">
+                    {hasReturnProviderLabel ? "Return Label Ready" : "Return Requested"}
+                  </p>
+                  <h2 className="mt-2 text-2xl font-semibold text-amber-950">
+                    {hasReturnProviderLabel ? "Return materials are ready" : "Buyer requested a return"}
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900">
+                    {order.issueReason || "This order has an active return or issue request."}
+                  </p>
+                </div>
+                <a
+                  href="#return-materials"
+                  className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
+                >
+                  {hasReturnProviderLabel ? "View Return Materials" : "Create Return Label"}
+                </a>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Spec label="Status" value={getSellerOrderStatusLabel(order)} />
             <Spec label="Buyer" value={order.buyerName} />
@@ -234,7 +258,7 @@ export default async function SellerOrderFulfillmentPage({
                 </div>
 
                 {returnFlowActive ? (
-                  <div className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
+                  <div id="return-materials" className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
                     <p className="text-sm font-semibold text-amber-950">Return Materials</p>
                     <p className="mt-2 text-sm leading-6 text-amber-900">
                       Buyer-to-seller return label details for this issue or return request.
