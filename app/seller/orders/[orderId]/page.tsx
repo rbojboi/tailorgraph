@@ -184,7 +184,10 @@ export default async function SellerOrderFulfillmentPage({
                       <form action={emailSellerShipmentLabelAction}>
                         <input type="hidden" name="orderId" value={order.id} />
                         <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
-                        <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950">
+                        <button
+                          type="submit"
+                          className="inline-flex appearance-none items-center rounded-full border border-stone-300 bg-white px-4 py-2 font-sans text-sm font-semibold leading-normal text-stone-900 transition hover:border-stone-950"
+                        >
                           {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
                         </button>
                       </form>
