@@ -17,6 +17,15 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function sellerSavedMessage(saved: string) {
+  switch (saved) {
+    case "shipment-email":
+      return "Shipment Label Sent to Email.";
+    default:
+      return `Saved ${saved}.`;
+  }
+}
+
 function addBusinessDays(startDate: Date, businessDays: number) {
   const date = new Date(startDate);
   let remaining = businessDays;
@@ -162,7 +171,7 @@ export default async function SellerPage({
           ) : null}
           {firstValue(params.saved) ? (
             <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
-              Saved {firstValue(params.saved)}.
+              {sellerSavedMessage(firstValue(params.saved)!)}
             </p>
           ) : null}
         </section>
