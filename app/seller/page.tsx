@@ -273,6 +273,16 @@ export default async function SellerPage({
                                 >
                                   View Shipping Details
                                 </Link>
+                                {order.shippingLabelUrl ? (
+                                  <a
+                                    href={order.shippingLabelUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                  >
+                                    Open Label PDF
+                                  </a>
+                                ) : null}
                                 {order.shippingQrCodeUrl ? (
                                   <a
                                     href={order.shippingQrCodeUrl}
