@@ -580,14 +580,6 @@ function shipmentSellerEmail(context: OrderNotificationContext) {
   const { order, buyer } = context;
   const sellerUrl = `${getAppUrl()}/seller`;
   const tracking = order.trackingNumber ? `${order.carrier || "Carrier"} - ${order.trackingNumber}` : "Tracking pending";
-  const qrHtml = order.shippingQrCodeUrl
-    ? `<div style="margin:20px 0 0;padding:18px;border-radius:20px;background:#fbf8f4;border:1px solid #e4dbcf">
-        <p style="margin:0 0 12px;color:#44403c;font-size:15px;line-height:1.6">If this carrier accepts QR drop-off, show this code at the counter so they can print/scan the label.</p>
-        <a href="${escapeHtml(order.shippingQrCodeUrl)}" style="display:inline-block">
-          <img src="${escapeHtml(order.shippingQrCodeUrl)}" alt="Carrier label QR code" style="display:block;width:180px;max-width:100%;height:auto;border-radius:16px;border:1px solid #e4dbcf;background:#fff" />
-        </a>
-      </div>`
-    : "";
 
   return {
     subject: `TailorGraph shipping label ready: ${order.listingTitle}`,
@@ -601,7 +593,6 @@ function shipmentSellerEmail(context: OrderNotificationContext) {
           ? "Use the PDF if you want to print the label, or use the QR code if the carrier counter accepts QR drop-off."
           : "Use the PDF to print the label. Shippo did not return a carrier QR code for this label."
       ],
-      bodyHtml: qrHtml,
       details: [
         { label: "Item", value: order.listingTitle },
         { label: "Buyer", value: buyer.name },

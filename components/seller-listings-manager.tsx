@@ -159,6 +159,12 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
 
       {order.shippingLabelUrl || order.shippingQrCodeUrl ? (
         <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href={`/seller/orders/${order.id}`}
+            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+          >
+            Open Fulfillment
+          </Link>
           {order.shippingLabelUrl ? (
             <a
               href={order.shippingLabelUrl}
@@ -239,6 +245,12 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
               Compare Shippo Rates
             </Link>
           ) : null}
+          <Link
+            href={`/seller/orders/${order.id}`}
+            className="inline-flex w-fit rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+          >
+            Open Fulfillment
+          </Link>
 
           <form action={shipOrderAction} className="grid gap-3 sm:grid-cols-3">
             <input type="hidden" name="orderId" value={order.id} />

@@ -260,6 +260,12 @@ export default async function SellerPage({
                                 />
                               </div>
                               <div className="mt-4 flex flex-wrap gap-2">
+                                <Link
+                                  href={`/seller/orders/${order.id}`}
+                                  className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                >
+                                  Open Fulfillment
+                                </Link>
                                 {order.shippingLabelUrl ? (
                                   <a
                                     href={order.shippingLabelUrl}
@@ -317,6 +323,12 @@ export default async function SellerPage({
                             <div className="mt-4 flex flex-wrap gap-2">
                               {shippoEnabled ? (
                                 <>
+                                <Link
+                                  href={`/seller/orders/${order.id}`}
+                                  className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                                >
+                                  Open Fulfillment
+                                </Link>
                                 <Link
                                   href={`/seller/orders/${order.id}/shippo`}
                                   className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"

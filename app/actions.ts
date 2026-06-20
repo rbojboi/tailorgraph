@@ -3408,6 +3408,7 @@ export async function shipOrderAction(formData: FormData) {
   }
 
   const orderId = stringValue(formData, "orderId");
+  const returnTo = stringValue(formData, "returnTo") || "/seller";
   const order = await findOrderById(orderId);
   if (!order || order.sellerId !== user.id) {
     redirect("/seller?authError=Order+not+found");
@@ -3442,7 +3443,7 @@ export async function shipOrderAction(formData: FormData) {
 
   revalidatePath("/seller");
   revalidatePath("/buyer");
-  redirect("/seller?saved=shipment");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=shipment`);
 }
 
 export async function buyShippoLabelAction(formData: FormData) {
@@ -3626,6 +3627,7 @@ export async function emailSellerShipmentLabelAction(formData: FormData) {
   }
 
   const orderId = stringValue(formData, "orderId");
+  const returnTo = stringValue(formData, "returnTo") || "/seller";
   const order = await findOrderById(orderId);
   if (!order || order.sellerId !== user.id) {
     redirect("/seller?authError=Order+not+found");
@@ -3653,7 +3655,7 @@ export async function emailSellerShipmentLabelAction(formData: FormData) {
     }
   );
 
-  redirect("/seller?saved=shipment-email");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=shipment-email`);
 }
 
 export async function confirmDeliveryAction(formData: FormData) {
