@@ -53,6 +53,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     returnProviderShipmentId: null,
     returnProviderRateId: null,
     returnProviderTransactionId: null,
+    returnStatus: null,
     issueReason: null,
     sellerNotes: null,
     shippedAt: null,

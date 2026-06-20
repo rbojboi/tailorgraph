@@ -509,6 +509,7 @@ export type Order = {
   returnProviderShipmentId: string | null;
   returnProviderRateId: string | null;
   returnProviderTransactionId: string | null;
+  returnStatus: "requested" | "approved" | "label_created" | "in_transit" | "received" | "closed" | null;
   issueReason: string | null;
   sellerNotes: string | null;
   shippedAt: string | null;

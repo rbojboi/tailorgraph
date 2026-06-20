@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   buyShippoLabelAction,
-  buyShippoReturnLabelAction,
+  confirmReturnAction,
   emailSellerShipmentLabelAction,
   shipOrderAction
 } from "@/app/actions";
@@ -30,6 +30,8 @@ function sellerOrderSavedMessage(saved: string) {
       return "Shipment Label & QR Sent to Email.";
     case "return-label":
       return "Return Label & QR Created.";
+    case "return-approved":
+      return "Return Confirmed. The buyer can now create the return label.";
     default:
       return `Saved ${saved}.`;
   }
@@ -88,7 +90,12 @@ export default async function SellerOrderFulfillmentPage({
   const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
   const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
   const canBuyLabel = !order.carrier && (order.status === "paid" || order.status === "processing");
-  const canBuyReturnLabel = returnFlowActive && order.returnsAccepted && !hasReturnProviderLabel && shippoEnabled;
+  const canConfirmReturn =
+    returnFlowActive &&
+    order.returnsAccepted &&
+    !hasReturnProviderLabel &&
+    order.returnStatus !== "approved" &&
+    order.returnStatus !== "label_created";
 
   return (
     <AppShell>
@@ -135,7 +142,7 @@ export default async function SellerOrderFulfillmentPage({
                   href="#return-materials"
                   className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
                 >
-                  {hasReturnProviderLabel ? "View Return Materials" : "Create Return Label"}
+                  {hasReturnProviderLabel ? "View Return Materials" : order.returnStatus === "approved" ? "View Return Status" : "Review Return"}
                 </a>
               </div>
             </div>
@@ -270,17 +277,17 @@ export default async function SellerOrderFulfillmentPage({
                       </p>
                     ) : null}
 
-                    {canBuyReturnLabel ? (
-                      <form action={buyShippoReturnLabelAction} className="mt-4 rounded-[1.25rem] border border-amber-200 bg-white p-4">
+                    {canConfirmReturn ? (
+                      <form action={confirmReturnAction} className="mt-4 rounded-[1.25rem] border border-amber-200 bg-white p-4">
                         <input type="hidden" name="orderId" value={order.id} />
                         <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
-                        <p className="text-sm font-semibold text-stone-950">Buy return label</p>
+                        <p className="text-sm font-semibold text-stone-950">Confirm return</p>
                         <p className="mt-2 text-sm leading-6 text-stone-700">
-                          Purchases the cheapest Shippo label from the buyer address back to your saved seller return address.
+                          Approve this return request so the buyer can create the return label from their account.
                         </p>
                         <Input name="sellerNotes" label="Seller notes" defaultValue={order.sellerNotes || ""} type="text" />
                         <button className="mt-4 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
-                          Buy Return Label
+                          Confirm Return
                         </button>
                       </form>
                     ) : null}
@@ -291,9 +298,9 @@ export default async function SellerOrderFulfillmentPage({
                       </p>
                     ) : null}
 
-                    {returnFlowActive && order.returnsAccepted && !shippoEnabled ? (
+                    {returnFlowActive && order.returnsAccepted && order.returnStatus === "approved" && !hasReturnProviderLabel ? (
                       <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
-                        Add `SHIPPO_API_TOKEN` to enable Shippo return labels.
+                        Return confirmed. Waiting for the buyer to create the return label.
                       </p>
                     ) : null}
 

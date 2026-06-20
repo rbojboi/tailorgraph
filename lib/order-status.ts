@@ -3,6 +3,7 @@ import { formatDisplayValue } from "./display";
 type OrderStatusDisplaySource = {
   status: string;
   issueReason?: string | null;
+  returnStatus?: string | null;
   trackingStatus: string | null;
   shippingLabelUrl?: string | null;
   shippingQrCodeUrl?: string | null;
@@ -53,6 +54,14 @@ export function getSellerOrderStatusLabel(order: OrderStatusDisplaySource) {
   }
 
   if (order.status === "issue_open") {
+    if (order.returnStatus === "label_created") {
+      return "Return Label Created";
+    }
+
+    if (order.returnStatus === "approved") {
+      return "Return Approved";
+    }
+
     if (order.issueReason?.toLowerCase().includes("return")) {
       return "Return Requested";
     }

@@ -69,6 +69,7 @@ import {
   updateBuyerAccount,
   updateOrderIssue,
   updateOrderReturnShippingWithProvider,
+  updateOrderReturnStatus,
   updateOrderShipping,
   updateOrderShippingWithProvider,
   updateSellerLocation,
@@ -3620,7 +3621,7 @@ export async function buySelectedShippoRateAction(formData: FormData) {
   redirect("/seller?saved=shippo-rate");
 }
 
-export async function buyShippoReturnLabelAction(formData: FormData) {
+export async function confirmReturnAction(formData: FormData) {
   redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+manage+returns");
   const user = await getCurrentUser();
   if (!user || (user.role !== "seller" && user.role !== "both")) {
@@ -3640,13 +3641,52 @@ export async function buyShippoReturnLabelAction(formData: FormData) {
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
   }
 
-  const [listing, buyer] = await Promise.all([findListingById(order.listingId), findUserById(order.buyerId)]);
+  if (order.returnLabelUrl || order.returnQrCodeUrl) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
+  }
+
+  await updateOrderReturnStatus(orderId, "approved", sellerNotes);
+
+  revalidatePath("/seller");
+  revalidatePath(`/seller/orders/${orderId}`);
+  revalidatePath("/buyer/orders");
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-approved`);
+}
+
+export async function buyShippoReturnLabelAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/buyer/orders?authError=Add+DATABASE_URL+to+manage+returns");
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/?authError=Please+log+in");
+  }
+
+  const orderId = stringValue(formData, "orderId");
+  const returnTo = stringValue(formData, "returnTo") || "/buyer/orders";
+  const order = await findOrderById(orderId);
+
+  if (!order || order.buyerId !== user.id) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
+  }
+
+  if (!order.returnsAccepted) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
+  }
+
+  if (order.returnStatus !== "approved" && order.returnStatus !== "label_created") {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=The+seller+needs+to+confirm+this+return+before+you+can+create+a+label`);
+  }
+
+  if (order.returnLabelUrl || order.returnQrCodeUrl) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
+  }
+
+  const [listing, seller] = await Promise.all([findListingById(order.listingId), findUserById(order.sellerId)]);
   if (!listing) {
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Listing+not+found+for+this+order`);
   }
 
-  if (!buyer) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Buyer+account+not+found+for+this+order`);
+  if (!seller) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Seller+account+not+found+for+this+order`);
   }
 
   let purchasedLabel;
@@ -3654,8 +3694,8 @@ export async function buyShippoReturnLabelAction(formData: FormData) {
     purchasedLabel = await purchaseShippoReturnLabel({
       order,
       listing,
-      buyer,
-      seller: user
+      buyer: user,
+      seller
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Shippo could not create a return label for this order.";
@@ -3674,7 +3714,7 @@ export async function buyShippoReturnLabelAction(formData: FormData) {
     returnProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
     returnProviderRateId: purchasedLabel.shippingProviderRateId,
     returnProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-    sellerNotes
+    sellerNotes: null
   });
 
   revalidatePath("/seller");
@@ -3880,7 +3920,9 @@ export async function openIssueAction(formData: FormData) {
     request: supportRequest
   });
   revalidatePath("/buyer");
+  revalidatePath("/buyer/orders");
   revalidatePath("/seller");
+  revalidatePath(`/seller/orders/${orderId}`);
   revalidatePath("/admin");
   revalidatePath("/support");
   redirect(returnTo || `/${order.buyerId === user.id ? "buyer" : "seller"}?saved=issue`);

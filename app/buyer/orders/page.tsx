@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { openIssueAction } from "@/app/actions";
+import { buyShippoReturnLabelAction, openIssueAction } from "@/app/actions";
 import { BuyerPurchaseActionsMenu } from "@/components/buyer-purchase-actions-menu";
 import { BuyerPurchaseFilterControl } from "@/components/buyer-purchase-filter-control";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
@@ -8,10 +8,12 @@ import { OrderRatingStars } from "@/components/order-rating-stars";
 import { AppShell, PageWrap, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDisplayValue } from "@/lib/display";
+import { isShippoConfigured } from "@/lib/shippo";
 import { ensureSeedData, listBuyerOrders } from "@/lib/store";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 type BuyerPurchaseFilter = "all" | "return_eligible" | "shipped" | "delivered" | "canceled";
+type BuyerReturnStatus = "requested" | "approved" | "label_created" | "in_transit" | "received" | "closed" | null;
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -71,9 +73,21 @@ function getTrackingUrl(carrier: string, trackingNumber: string) {
   return null;
 }
 
-function getBuyerPurchaseStatus(order: { status: string; returnsAccepted: boolean; deliveredAt: string | null }) {
+function getBuyerPurchaseStatus(order: { status: string; returnsAccepted: boolean; deliveredAt: string | null; returnStatus?: BuyerReturnStatus }) {
   if (["canceled", "refunded", "failed"].includes(order.status)) {
     return "Canceled";
+  }
+
+  if (order.returnStatus === "label_created") {
+    return "Return Label Created";
+  }
+
+  if (order.returnStatus === "approved") {
+    return "Return Approved";
+  }
+
+  if (order.returnStatus === "requested") {
+    return "Return Requested";
   }
 
   if (order.status === "shipped" || order.status === "issue_open") {
@@ -136,7 +150,12 @@ function canReturnOrder(order: {
   status: string;
   returnsAccepted: boolean;
   deliveredAt: string | null;
+  returnStatus?: BuyerReturnStatus;
 }) {
+  if (order.returnStatus) {
+    return false;
+  }
+
   return getBuyerPurchaseStatus(order) === "Return Eligible";
 }
 
@@ -169,7 +188,7 @@ function canRateOrder(order: {
   );
 }
 
-function filterBuyerOrders<T extends { status: string; returnsAccepted: boolean; deliveredAt: string | null }>(orders: T[], filter: BuyerPurchaseFilter) {
+function filterBuyerOrders<T extends { status: string; returnsAccepted: boolean; deliveredAt: string | null; returnStatus?: BuyerReturnStatus }>(orders: T[], filter: BuyerPurchaseFilter) {
   if (filter === "canceled") {
     return orders.filter((order) => ["canceled", "refunded", "failed"].includes(order.status));
   }
@@ -208,7 +227,9 @@ export default async function BuyerOrdersPage({
       ? requestedPurchaseStatus
       : "all";
   const saved = firstValue(params.saved);
+  const authError = firstValue(params.authError);
   const ratedOrder = firstValue(params.ratedOrder);
+  const shippoEnabled = isShippoConfigured();
   const orders = await listBuyerOrders(user.id);
   const filteredOrders = filterBuyerOrders(orders, selectedPurchaseStatus);
 
@@ -231,6 +252,16 @@ export default async function BuyerOrdersPage({
         {saved === "issue" ? (
           <div className="rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-950">
             Your request has been sent to the seller for review.
+          </div>
+        ) : null}
+        {saved === "return-label" ? (
+          <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+            Return label and QR created.
+          </div>
+        ) : null}
+        {authError ? (
+          <div className="rounded-2xl bg-rose-100 px-4 py-3 text-sm text-rose-900">
+            {authError}
           </div>
         ) : null}
 
@@ -299,6 +330,66 @@ export default async function BuyerOrdersPage({
                     </div>
                     {order.trackingStatus ? <Spec label="Tracking Status" value={formatDisplayValue(order.trackingStatus)} /> : null}
                   </div>
+                  {order.returnStatus ? (
+                    <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-amber-950">
+                            {order.returnStatus === "label_created"
+                              ? "Return label ready"
+                              : order.returnStatus === "approved"
+                                ? "Return approved"
+                                : "Return requested"}
+                          </p>
+                          <p className="mt-1 text-sm leading-6 text-amber-900">
+                            {order.returnStatus === "label_created"
+                              ? "Use the return label or carrier QR to send the item back."
+                              : order.returnStatus === "approved"
+                                ? "Create the return label when you are ready to ship the item back."
+                                : "The seller needs to confirm the return before a label can be created."}
+                          </p>
+                        </div>
+                        {order.returnStatus === "approved" && !order.returnLabelUrl && !order.returnQrCodeUrl && shippoEnabled ? (
+                          <form action={buyShippoReturnLabelAction}>
+                            <input type="hidden" name="orderId" value={order.id} />
+                            <input type="hidden" name="returnTo" value="/buyer/orders" />
+                            <button className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950">
+                              Create Return Label
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                      {order.returnStatus === "approved" && !shippoEnabled ? (
+                        <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
+                          Return labels are not configured yet.
+                        </p>
+                      ) : null}
+                      {order.returnLabelUrl || order.returnQrCodeUrl ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {order.returnLabelUrl ? (
+                            <a
+                              href={order.returnLabelUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900"
+                            >
+                              Open Return Label PDF
+                            </a>
+                          ) : null}
+                          {order.returnQrCodeUrl ? (
+                            <a
+                              href={order.returnQrCodeUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900"
+                            >
+                              Open Return Carrier QR
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
                   {canCancelOrder(order) || canReturnOrder(order) ? (
                     <div className="mt-4 flex flex-wrap gap-2">
                       {canCancelOrder(order) ? (

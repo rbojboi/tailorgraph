@@ -82,7 +82,7 @@ const defaultNotificationPreferences: User["notificationPreferences"] = {
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 32;
+const SCHEMA_VERSION = 33;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -364,6 +364,7 @@ async function initSchema() {
       return_provider_shipment_id TEXT,
       return_provider_rate_id TEXT,
       return_provider_transaction_id TEXT,
+      return_status TEXT,
       issue_reason TEXT,
       seller_notes TEXT,
       shipped_at TIMESTAMPTZ,
@@ -566,6 +567,7 @@ async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_shipment_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_rate_id TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_provider_transaction_id TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_status TEXT;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS measurement_rating INTEGER;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS condition_rating INTEGER;
   `);
@@ -865,6 +867,16 @@ function mapListing(row: Record<string, unknown>): Listing {
 }
 
 function mapOrder(row: Record<string, unknown>): Order {
+  const issueReason = row.issue_reason ? String(row.issue_reason) : null;
+  const storedReturnStatus = row.return_status ? String(row.return_status) : null;
+  const inferredReturnStatus =
+    storedReturnStatus ||
+    (row.return_provider_transaction_id
+      ? "label_created"
+      : issueReason?.toLowerCase().includes("return")
+        ? "requested"
+        : null);
+
   return {
     id: String(row.id),
     buyerId: String(row.buyer_id),
@@ -920,7 +932,16 @@ function mapOrder(row: Record<string, unknown>): Order {
     returnProviderShipmentId: row.return_provider_shipment_id ? String(row.return_provider_shipment_id) : null,
     returnProviderRateId: row.return_provider_rate_id ? String(row.return_provider_rate_id) : null,
     returnProviderTransactionId: row.return_provider_transaction_id ? String(row.return_provider_transaction_id) : null,
-    issueReason: row.issue_reason ? String(row.issue_reason) : null,
+    returnStatus:
+      inferredReturnStatus === "requested" ||
+      inferredReturnStatus === "approved" ||
+      inferredReturnStatus === "label_created" ||
+      inferredReturnStatus === "in_transit" ||
+      inferredReturnStatus === "received" ||
+      inferredReturnStatus === "closed"
+        ? inferredReturnStatus
+        : null,
+    issueReason,
     sellerNotes: row.seller_notes ? String(row.seller_notes) : null,
     shippedAt: row.shipped_at ? new Date(String(row.shipped_at)).toISOString() : null,
     deliveredAt: row.delivered_at ? new Date(String(row.delivered_at)).toISOString() : null,
@@ -2148,6 +2169,7 @@ export async function createOrder(
     | "returnProviderShipmentId"
     | "returnProviderRateId"
     | "returnProviderTransactionId"
+    | "returnStatus"
   >
 ): Promise<Order> {
   await ensureSchema();
@@ -2325,6 +2347,7 @@ export async function updateOrderReturnShippingWithProvider(
          return_provider_rate_id = $10,
          return_provider_transaction_id = $11,
          seller_notes = COALESCE($12, seller_notes),
+         return_status = 'label_created',
          status = CASE
            WHEN status NOT IN ('canceled', 'refunded', 'failed') THEN 'issue_open'
            ELSE status
@@ -2410,8 +2433,35 @@ export async function updateOrderIssue(
 ): Promise<void> {
   await ensureSchema();
   await requirePool().query(
-    "UPDATE orders SET status = $1, issue_reason = $2, seller_notes = $3 WHERE id = $4",
+    `UPDATE orders
+     SET status = $1,
+         issue_reason = $2,
+         seller_notes = $3,
+         return_status = CASE
+           WHEN LOWER(COALESCE($2, '')) LIKE '%return%' THEN COALESCE(return_status, 'requested')
+           ELSE return_status
+         END
+     WHERE id = $4`,
     [status, issueReason, sellerNotes, orderId]
+  );
+}
+
+export async function updateOrderReturnStatus(
+  orderId: string,
+  returnStatus: NonNullable<Order["returnStatus"]>,
+  sellerNotes: string | null
+): Promise<void> {
+  await ensureSchema();
+  await requirePool().query(
+    `UPDATE orders
+     SET return_status = $1,
+         seller_notes = COALESCE($2, seller_notes),
+         status = CASE
+           WHEN status NOT IN ('canceled', 'refunded', 'failed') THEN 'issue_open'
+           ELSE status
+         END
+     WHERE id = $3`,
+    [returnStatus, sellerNotes, orderId]
   );
 }
 

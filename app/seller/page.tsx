@@ -209,6 +209,11 @@ export default async function SellerPage({
                   sales.map((order) => {
                     const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
                     const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
+                    const returnAlertTitle = hasReturnProviderLabel
+                      ? "Return label ready"
+                      : order.returnStatus === "approved"
+                        ? "Return confirmed"
+                        : "Return requested";
 
                     return (
                     <article key={order.id} className="rounded-[1.5rem] border border-stone-300 bg-white p-4">
@@ -226,11 +231,13 @@ export default async function SellerPage({
                         <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-50 p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-amber-950">
-                                {hasReturnProviderLabel ? "Return label ready" : "Return requested"}
-                              </p>
+                              <p className="text-sm font-semibold text-amber-950">{returnAlertTitle}</p>
                               <p className="mt-1 text-sm leading-6 text-amber-900">
-                                {order.issueReason || "This order has an active return or issue request."}
+                                {hasReturnProviderLabel
+                                  ? "The buyer return label has been created."
+                                  : order.returnStatus === "approved"
+                                    ? "Waiting for the buyer to create the return label."
+                                    : order.issueReason || "This order has an active return or issue request."}
                               </p>
                             </div>
                             <Link
