@@ -3723,6 +3723,81 @@ export async function buyShippoReturnLabelAction(formData: FormData) {
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
 }
 
+export async function buySelectedShippoReturnRateAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/buyer/orders?authError=Add+DATABASE_URL+to+manage+returns");
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/?authError=Please+log+in");
+  }
+
+  const orderId = stringValue(formData, "orderId");
+  const shipmentId = stringValue(formData, "shipmentId");
+  const rateId = stringValue(formData, "rateId");
+  const returnTo = stringValue(formData, "returnTo") || `/buyer/orders/${orderId}/return/shippo`;
+  const provider = stringValue(formData, "provider");
+  const currency = stringValue(formData, "currency");
+  const serviceLevel = stringValue(formData, "serviceLevel");
+  const rateAmountRaw = stringValue(formData, "rateAmount");
+  const order = await findOrderById(orderId);
+
+  if (!order || order.buyerId !== user.id) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
+  }
+
+  if (!order.returnsAccepted) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
+  }
+
+  if (order.returnStatus !== "approved" && order.returnStatus !== "label_created") {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=The+seller+needs+to+confirm+this+return+before+you+can+create+a+label`);
+  }
+
+  if (order.returnLabelUrl || order.returnQrCodeUrl) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
+  }
+
+  let purchasedLabel;
+  try {
+    purchasedLabel = await purchaseShippoLabelForRate({
+      orderId,
+      shipmentId,
+      rateId,
+      rate: {
+        rateId,
+        provider: provider || "Shippo",
+        serviceLevel: serviceLevel || "Standard",
+        amount: rateAmountRaw ? Number(rateAmountRaw) : null,
+        currency: currency || null,
+        estimatedDays: null,
+        durationTerms: null
+      }
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Shippo could not create a return label for this service.";
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(message)}`);
+  }
+
+  await updateOrderReturnShippingWithProvider(orderId, {
+    carrier: purchasedLabel.carrier,
+    trackingNumber: purchasedLabel.trackingNumber,
+    trackingUrl: purchasedLabel.trackingUrl,
+    trackingStatus: purchasedLabel.trackingStatus,
+    returnEta: purchasedLabel.shippingEta,
+    returnLabelUrl: purchasedLabel.shippingLabelUrl,
+    returnQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
+    returnProvider: purchasedLabel.shippingProvider,
+    returnProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
+    returnProviderRateId: purchasedLabel.shippingProviderRateId,
+    returnProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
+    sellerNotes: null
+  });
+
+  revalidatePath("/seller");
+  revalidatePath(`/seller/orders/${orderId}`);
+  revalidatePath("/buyer/orders");
+  redirect(`/buyer/orders?saved=return-label`);
+}
+
 export async function emailSellerShipmentLabelAction(formData: FormData) {
   redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+email+shipment+labels");
   const user = await getCurrentUser();

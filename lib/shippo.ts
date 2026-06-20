@@ -299,6 +299,40 @@ export async function createShippoShipmentQuote(input: {
   };
 }
 
+export async function createShippoReturnShipmentQuote(input: {
+  order: Pick<Order, "id" | "shippingAddress">;
+  listing: Pick<Listing, "category">;
+  buyer: Pick<User, "name" | "email" | "phoneNumber">;
+  seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
+}): Promise<ShippoShipmentQuote> {
+  const { addressFrom, addressTo } = getNormalizedShippoReturnAddresses(input);
+
+  const shipment = await shippoRequest<ShippoShipmentResponse>("/shipments/", {
+    method: "POST",
+    body: JSON.stringify({
+      address_from: addressFrom,
+      address_to: addressTo,
+      extra: {
+        qr_code_requested: true
+      },
+      parcels: [estimateShippoParcel(input.listing)],
+      async: false,
+      metadata: `order:${input.order.id}:return`
+    })
+  });
+
+  const rates = (shipment.rates || []).map(mapRateOption).filter((rate) => rate.amount !== null);
+
+  if (!rates.length) {
+    throw new Error(formatShippoErrors(shipment.messages));
+  }
+
+  return {
+    shipmentId: shipment.object_id,
+    rates: rates.sort((left, right) => (left.amount ?? 0) - (right.amount ?? 0))
+  };
+}
+
 export async function purchaseShippoLabelForRate(input: {
   orderId: string;
   shipmentId: string;
@@ -360,33 +394,12 @@ export async function purchaseShippoReturnLabel(input: {
   buyer: Pick<User, "name" | "email" | "phoneNumber">;
   seller: Pick<User, "name" | "email" | "phoneNumber" | "buyerProfile">;
 }): Promise<ShippoLabelPurchase> {
-  const { addressFrom, addressTo } = getNormalizedShippoReturnAddresses(input);
-
-  const shipment = await shippoRequest<ShippoShipmentResponse>("/shipments/", {
-    method: "POST",
-    body: JSON.stringify({
-      address_from: addressFrom,
-      address_to: addressTo,
-      extra: {
-        qr_code_requested: true
-      },
-      parcels: [estimateShippoParcel(input.listing)],
-      async: false,
-      metadata: `order:${input.order.id}:return`
-    })
-  });
-
-  const rates = (shipment.rates || []).map(mapRateOption).filter((rate) => rate.amount !== null);
-
-  if (!rates.length) {
-    throw new Error(formatShippoErrors(shipment.messages));
-  }
-
-  const selectedRate = rates.sort((left, right) => (left.amount ?? 0) - (right.amount ?? 0))[0];
+  const quote = await createShippoReturnShipmentQuote(input);
+  const selectedRate = quote.rates[0];
 
   return purchaseShippoLabelForRate({
     orderId: input.order.id,
-    shipmentId: shipment.object_id,
+    shipmentId: quote.shipmentId,
     rateId: selectedRate.rateId,
     rate: selectedRate
   });

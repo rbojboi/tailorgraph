@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { buyShippoReturnLabelAction, openIssueAction } from "@/app/actions";
+import { openIssueAction } from "@/app/actions";
 import { BuyerPurchaseActionsMenu } from "@/components/buyer-purchase-actions-menu";
 import { BuyerPurchaseFilterControl } from "@/components/buyer-purchase-filter-control";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
@@ -350,13 +350,12 @@ export default async function BuyerOrdersPage({
                           </p>
                         </div>
                         {order.returnStatus === "approved" && !order.returnLabelUrl && !order.returnQrCodeUrl && shippoEnabled ? (
-                          <form action={buyShippoReturnLabelAction}>
-                            <input type="hidden" name="orderId" value={order.id} />
-                            <input type="hidden" name="returnTo" value="/buyer/orders" />
-                            <button className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950">
-                              Create Return Label
-                            </button>
-                          </form>
+                          <Link
+                            href={`/buyer/orders/${order.id}/return/shippo`}
+                            className="rounded-full bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-950"
+                          >
+                            Choose Return Label
+                          </Link>
                         ) : null}
                       </div>
                       {order.returnStatus === "approved" && !shippoEnabled ? (
