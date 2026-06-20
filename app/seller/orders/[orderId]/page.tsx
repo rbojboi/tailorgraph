@@ -8,6 +8,7 @@ import {
 import { AppShell, Input, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency, formatDisplayValue } from "@/lib/display";
+import { getSellerOrderStatusLabel } from "@/lib/order-status";
 import { isShippoConfigured } from "@/lib/shippo";
 import { ensureSeedData, findListingById, findOrderById } from "@/lib/store";
 import type { Order } from "@/lib/types";
@@ -53,14 +54,6 @@ function shippingAddressLines(order: Order) {
       .join(", "),
     order.shippingAddress.country
   ].filter(Boolean);
-}
-
-function orderStatusLabel(status: string) {
-  if (status === "issue_open") {
-    return "Issue Open";
-  }
-
-  return formatDisplayValue(status);
 }
 
 export default async function SellerOrderFulfillmentPage({
@@ -119,7 +112,7 @@ export default async function SellerOrderFulfillmentPage({
           ) : null}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Spec label="Status" value={orderStatusLabel(order.status)} />
+            <Spec label="Status" value={getSellerOrderStatusLabel(order)} />
             <Spec label="Buyer" value={order.buyerName} />
             <Spec label="Order Total" value={formatCurrency(order.amount)} />
             <Spec label="Ordered" value={formatDateLabel(order.createdAt)} />

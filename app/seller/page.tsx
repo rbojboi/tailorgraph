@@ -6,10 +6,11 @@ import { BuyerOfferFilterControl } from "@/components/buyer-offer-filter-control
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency, formatDisplayValue } from "@/lib/display";
+import { getSellerOrderStatusLabel } from "@/lib/order-status";
 import { isShippoConfigured } from "@/lib/shippo";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { ensureSeedData, listSellerInventory, listSellerOffers, listSellerOrders } from "@/lib/store";
-import type { OfferStatus, Order } from "@/lib/types";
+import type { OfferStatus } from "@/lib/types";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -64,22 +65,6 @@ function getSellerDeliveryLabel(order: { status: string; createdAt: string; ship
 
   const deliveryBase = order.shippedAt ?? order.createdAt;
   return `Expected ${formatShortDate(addBusinessDays(new Date(deliveryBase), 5).toISOString())}`;
-}
-
-function getSellerSaleStatus(order: Order) {
-  if (["canceled", "refunded", "failed"].includes(order.status)) {
-    return "Canceled";
-  }
-
-  if (order.status === "shipped" || order.status === "issue_open") {
-    return "Shipped";
-  }
-
-  if (order.status === "delivered") {
-    return "Completed";
-  }
-
-  return "Sold";
 }
 
 function getOfferTimeRemainingLabel(offer: { status: OfferStatus; createdAt: string }) {
@@ -234,7 +219,7 @@ export default async function SellerPage({
                         </p>
                       </div>
                           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                            <Spec label="Status" value={getSellerSaleStatus(order)} />
+                            <Spec label="Status" value={getSellerOrderStatusLabel(order)} />
                             <Spec label="Delivery" value={getSellerDeliveryLabel(order)} />
                             <Spec label="Carrier" value={order.carrier || "Pending"} />
                           </div>
