@@ -15,6 +15,9 @@ import type { Order } from "@/lib/types";
 type PageParams = Promise<{ orderId: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+const shipmentMaterialButtonClass =
+  "rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950";
+
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -161,7 +164,7 @@ export default async function SellerOrderFulfillmentPage({
                         href={order.shippingLabelUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                        className={shipmentMaterialButtonClass}
                       >
                         Open Label PDF
                       </a>
@@ -171,7 +174,7 @@ export default async function SellerOrderFulfillmentPage({
                         href={order.shippingQrCodeUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                        className={shipmentMaterialButtonClass}
                       >
                         Open Carrier QR
                       </a>
@@ -186,13 +189,7 @@ export default async function SellerOrderFulfillmentPage({
                         <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
                         <button
                           type="submit"
-                          className="inline-flex appearance-none items-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-stone-900 transition hover:border-stone-950"
-                          style={{
-                            fontFamily: "inherit",
-                            fontSize: "0.875rem",
-                            fontWeight: 600,
-                            lineHeight: "1.25rem"
-                          }}
+                          className={shipmentMaterialButtonClass}
                         >
                           {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
                         </button>
