@@ -289,7 +289,15 @@ export default async function SellerPage({
                                 {(order.shippingLabelUrl || order.shippingQrCodeUrl) && user.email ? (
                                   <form action={emailSellerShipmentLabelAction}>
                                     <input type="hidden" name="orderId" value={order.id} />
-                                    <button className="inline-flex appearance-none items-center justify-center rounded-full border border-emerald-300 bg-white px-4 py-2 font-[inherit] text-sm font-semibold leading-5 text-emerald-950 transition hover:border-emerald-700">
+                                    <button
+                                      className="inline-flex appearance-none items-center justify-center rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-emerald-950 transition hover:border-emerald-700"
+                                      style={{
+                                        fontFamily: "inherit",
+                                        fontSize: "0.875rem",
+                                        fontWeight: 600,
+                                        lineHeight: "1.25rem"
+                                      }}
+                                    >
                                       {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
                                     </button>
                                   </form>
