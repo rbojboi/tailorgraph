@@ -20,7 +20,7 @@ function firstValue(value: string | string[] | undefined) {
 function sellerSavedMessage(saved: string) {
   switch (saved) {
     case "shipment-email":
-      return "Shipment Label Sent to Email.";
+      return "Shipment Label & QR Sent to Email.";
     default:
       return `Saved ${saved}.`;
   }
