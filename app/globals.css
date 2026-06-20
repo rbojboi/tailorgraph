@@ -112,6 +112,41 @@ h4 {
   box-shadow: 0 22px 60px rgba(58, 43, 28, 0.08);
 }
 
+.shipment-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: white;
+  padding: 0.5rem 1rem;
+  font-family: inherit !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  line-height: 1.5 !important;
+  text-decoration: none;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.shipment-action-button--stone {
+  border: 1px solid rgb(214 211 209);
+  color: rgb(28 25 23);
+}
+
+.shipment-action-button--stone:hover {
+  border-color: rgb(28 25 23);
+}
+
+.shipment-action-button--emerald {
+  border: 1px solid rgb(110 231 183);
+  color: rgb(2 44 34);
+}
+
+.shipment-action-button--emerald:hover {
+  border-color: rgb(4 120 87);
+}
+
 .marketplace-context-bar {
   background: transparent;
   border: 0;

@@ -263,7 +263,7 @@ export default async function SellerPage({
                                     href={order.shippingLabelUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                    className="shipment-action-button shipment-action-button--emerald"
                                   >
                                     Open Label PDF
                                   </a>
@@ -273,23 +273,15 @@ export default async function SellerPage({
                                     href={order.shippingQrCodeUrl}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                    className="shipment-action-button shipment-action-button--emerald"
                                   >
                                     Open Carrier QR
                                   </a>
                                 ) : null}
                                 {(order.shippingLabelUrl || order.shippingQrCodeUrl) && user.email ? (
-                                  <form action={emailSellerShipmentLabelAction}>
+                                  <form action={emailSellerShipmentLabelAction} className="contents">
                                     <input type="hidden" name="orderId" value={order.id} />
-                                    <button
-                                      className="inline-flex appearance-none items-center justify-center rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-emerald-950 transition hover:border-emerald-700"
-                                      style={{
-                                        fontFamily: "inherit",
-                                        fontSize: "0.875rem",
-                                        fontWeight: 600,
-                                        lineHeight: "1.25rem"
-                                      }}
-                                    >
+                                    <button type="submit" className="shipment-action-button shipment-action-button--emerald">
                                       {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
                                     </button>
                                   </form>

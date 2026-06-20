@@ -161,7 +161,7 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
         <div className="mt-4 flex flex-wrap gap-3">
           <Link
             href={`/seller/orders/${order.id}`}
-            className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+            className="shipment-action-button shipment-action-button--stone"
           >
             Open Fulfillment
           </Link>
@@ -170,7 +170,7 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
               href={order.shippingLabelUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+              className="shipment-action-button shipment-action-button--stone"
             >
               Open Shipping Label
             </a>
@@ -180,7 +180,7 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
               href={order.shippingQrCodeUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+              className="shipment-action-button shipment-action-button--stone"
             >
               Open Carrier QR
             </a>
@@ -194,22 +194,14 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
               href={order.trackingUrl}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900"
+              className="shipment-action-button shipment-action-button--stone"
             >
               Open Tracking
             </a>
           ) : null}
-          <form action={emailSellerShipmentLabelAction}>
+          <form action={emailSellerShipmentLabelAction} className="contents">
             <input type="hidden" name="orderId" value={order.id} />
-            <button
-              className="inline-flex appearance-none items-center justify-center rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold leading-5 text-stone-900 transition hover:border-stone-950"
-              style={{
-                fontFamily: "inherit",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                lineHeight: "1.25rem"
-              }}
-            >
+            <button type="submit" className="shipment-action-button shipment-action-button--stone">
               {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
             </button>
           </form>

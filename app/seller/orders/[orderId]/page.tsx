@@ -17,7 +17,7 @@ type PageParams = Promise<{ orderId: string }>;
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 const shipmentMaterialButtonClass =
-  "rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950";
+  "shipment-action-button shipment-action-button--stone";
 
 function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
