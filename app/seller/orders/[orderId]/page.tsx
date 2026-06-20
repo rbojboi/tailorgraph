@@ -126,77 +126,106 @@ export default async function SellerOrderFulfillmentPage({
         <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <article className="panel rounded-[1.75rem] p-6">
             <SectionTitle
-              eyebrow="Next Step"
-              title={order.carrier ? "Shipment Materials" : "Buy or Add Shipping"}
+              eyebrow="Shipping"
+              title={order.carrier ? "Shipping Details" : "Buy or Add Shipping"}
               description={
                 order.carrier
-                  ? "Use the carrier label, QR code, and tracking link for this shipment."
+                  ? "Open fulfillment materials and review carrier data without mixing the two."
                   : "Buy a Shippo label or enter tracking manually if you already shipped this order."
               }
             />
 
             {order.carrier ? (
-              <div className="mt-5 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Spec label="Carrier" value={order.carrier} />
-                  <Spec label="Tracking" value={order.trackingNumber || "Pending"} />
-                  <Spec
-                    label="Tracking Status"
-                    value={order.trackingStatus ? formatDisplayValue(order.trackingStatus) : "Pending"}
-                  />
-                  <Spec label="ETA" value={formatDateLabel(order.shippingEta)} />
+              <div className="mt-5 grid gap-4">
+                <div className="rounded-[1.5rem] border border-stone-300 bg-white p-5">
+                  <p className="text-sm font-semibold text-stone-950">Shipment Materials</p>
+                  <p className="mt-2 text-sm leading-6 text-stone-700">
+                    Open the carrier documents the seller needs for package handoff.
+                  </p>
+
+                  {!hasProviderLabel ? (
+                    <p className="mt-4 rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                      No Shippo label materials are attached to this shipment yet.
+                    </p>
+                  ) : null}
+
+                  {hasProviderLabel && !order.shippingQrCodeUrl ? (
+                    <p className="mt-4 rounded-2xl bg-stone-100 px-4 py-3 text-sm text-stone-700">
+                      Carrier QR was not returned for this label. Use the PDF label instead.
+                    </p>
+                  ) : null}
+
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {order.shippingLabelUrl ? (
+                      <a
+                        href={order.shippingLabelUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                      >
+                        Open Label PDF
+                      </a>
+                    ) : null}
+                    {order.shippingQrCodeUrl ? (
+                      <a
+                        href={order.shippingQrCodeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                      >
+                        Open Carrier QR
+                      </a>
+                    ) : hasProviderLabel ? (
+                      <span className="rounded-full border border-stone-200 bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-600">
+                        Carrier QR unavailable
+                      </span>
+                    ) : null}
+                    {hasProviderLabel ? (
+                      <form action={emailSellerShipmentLabelAction}>
+                        <input type="hidden" name="orderId" value={order.id} />
+                        <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
+                        <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950">
+                          {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
+                        </button>
+                      </form>
+                    ) : null}
+                  </div>
                 </div>
 
-                {!order.shippingQrCodeUrl ? (
-                  <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-emerald-900">
-                    Carrier QR was not returned for this label. Use the PDF label instead.
+                <div className="rounded-[1.5rem] border border-stone-300 bg-stone-50 p-5">
+                  <p className="text-sm font-semibold text-stone-950">Shipping Data</p>
+                  <p className="mt-2 text-sm leading-6 text-stone-700">
+                    Carrier, tracking, and delivery status for this order.
                   </p>
-                ) : null}
 
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {order.shippingLabelUrl ? (
-                    <a
-                      href={order.shippingLabelUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
-                    >
-                      Open Label PDF
-                    </a>
-                  ) : null}
-                  {order.shippingQrCodeUrl ? (
-                    <a
-                      href={order.shippingQrCodeUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
-                    >
-                      Open Carrier QR
-                    </a>
-                  ) : (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
-                      Carrier QR unavailable
-                    </span>
-                  )}
-                  {order.trackingUrl ? (
-                    <a
-                      href={order.trackingUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
-                    >
-                      Track Shipment
-                    </a>
-                  ) : null}
-                  {hasProviderLabel ? (
-                    <form action={emailSellerShipmentLabelAction}>
-                      <input type="hidden" name="orderId" value={order.id} />
-                      <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
-                      <button className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700">
-                        {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
-                      </button>
-                    </form>
-                  ) : null}
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <Spec label="Carrier" value={order.carrier} />
+                    <div className="rounded-2xl bg-white px-3 py-3">
+                      <p className="text-xs uppercase tracking-wide text-stone-500">Tracking</p>
+                      {order.trackingNumber ? (
+                        order.trackingUrl ? (
+                          <a
+                            href={order.trackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="mt-1 block text-sm font-semibold text-[var(--accent)] transition hover:text-stone-950"
+                          >
+                            {order.trackingNumber}
+                          </a>
+                        ) : (
+                          <p className="mt-1 text-sm font-semibold text-stone-900">{order.trackingNumber}</p>
+                        )
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-stone-900">Pending</p>
+                      )}
+                    </div>
+                    <Spec
+                      label="Tracking Status"
+                      value={order.trackingStatus ? formatDisplayValue(order.trackingStatus) : "Pending"}
+                    />
+                    <Spec label="ETA" value={formatDateLabel(order.shippingEta)} />
+                    <Spec label="Shipped" value={formatDateLabel(order.shippedAt)} />
+                  </div>
                 </div>
               </div>
             ) : (
