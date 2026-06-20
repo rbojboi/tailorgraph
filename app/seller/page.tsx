@@ -242,18 +242,25 @@ export default async function SellerPage({
                             <div className="mt-4 rounded-[1.25rem] border border-emerald-200 bg-emerald-50 p-4">
                               <div>
                                 <p className="text-sm font-semibold text-emerald-950">Shipment label ready</p>
-                                <p className="mt-1 text-xs leading-5 text-emerald-900">
-                                  Open the label PDF to print it, or use the carrier QR if Shippo returned one for this
-                                  service.
-                                </p>
                               </div>
-                              {!order.shippingQrCodeUrl ? (
-                                <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-xs text-emerald-900">
-                                  Carrier QR was not returned for this label. Use the PDF label instead.
-                                </p>
-                              ) : null}
                               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                                <Spec label="Tracking" value={order.trackingNumber || "Pending"} />
+                                <div className="rounded-2xl bg-white px-3 py-3">
+                                  <p className="text-xs uppercase tracking-[0.2em] text-stone-500">Tracking</p>
+                                  {order.trackingUrl && order.trackingNumber ? (
+                                    <a
+                                      href={order.trackingUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="mt-1 block text-sm font-semibold text-stone-900 underline decoration-stone-300 underline-offset-4 transition hover:text-[var(--accent)]"
+                                    >
+                                      {order.trackingNumber}
+                                    </a>
+                                  ) : (
+                                    <p className="mt-1 text-sm font-semibold text-stone-900">
+                                      {order.trackingNumber || "Pending"}
+                                    </p>
+                                  )}
+                                </div>
                                 <Spec
                                   label="Tracking Status"
                                   value={order.trackingStatus ? formatDisplayValue(order.trackingStatus) : "Pending"}
@@ -262,20 +269,10 @@ export default async function SellerPage({
                               <div className="mt-4 flex flex-wrap gap-2">
                                 <Link
                                   href={`/seller/orders/${order.id}`}
-                                  className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
+                                  className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
                                 >
-                                  Open Fulfillment
+                                  View Shipping Details
                                 </Link>
-                                {order.shippingLabelUrl ? (
-                                  <a
-                                    href={order.shippingLabelUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white"
-                                  >
-                                    Open Label PDF
-                                  </a>
-                                ) : null}
                                 {order.shippingQrCodeUrl ? (
                                   <a
                                     href={order.shippingQrCodeUrl}
@@ -284,21 +281,6 @@ export default async function SellerPage({
                                     className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
                                   >
                                     Open Carrier QR
-                                  </a>
-                                ) : null}
-                                {!order.shippingQrCodeUrl ? (
-                                  <span className="rounded-full border border-emerald-200 bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-900">
-                                    Carrier QR unavailable
-                                  </span>
-                                ) : null}
-                                {order.trackingUrl ? (
-                                  <a
-                                    href={order.trackingUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-950 transition hover:border-emerald-700"
-                                  >
-                                    Track Shipment
                                   </a>
                                 ) : null}
                                 {(order.shippingLabelUrl || order.shippingQrCodeUrl) && user.email ? (
@@ -323,24 +305,24 @@ export default async function SellerPage({
                             <div className="mt-4 flex flex-wrap gap-2">
                               {shippoEnabled ? (
                                 <>
-                                <Link
-                                  href={`/seller/orders/${order.id}`}
-                                  className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
-                                >
-                                  Open Fulfillment
-                                </Link>
-                                <Link
-                                  href={`/seller/orders/${order.id}/shippo`}
-                                  className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
-                                >
-                                  Compare Shippo Rates
-                                </Link>
-                                <form action={buyShippoLabelAction}>
-                                  <input type="hidden" name="orderId" value={order.id} />
-                                  <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
-                                    Buy Cheapest Label
-                                  </button>
-                                </form>
+                                  <Link
+                                    href={`/seller/orders/${order.id}`}
+                                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                                  >
+                                    View Shipping Details
+                                  </Link>
+                                  <Link
+                                    href={`/seller/orders/${order.id}/shippo`}
+                                    className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+                                  >
+                                    Compare Shippo Rates
+                                  </Link>
+                                  <form action={buyShippoLabelAction}>
+                                    <input type="hidden" name="orderId" value={order.id} />
+                                    <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
+                                      Buy Cheapest Label
+                                    </button>
+                                  </form>
                               </>
                             ) : (
                               <p className="rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
