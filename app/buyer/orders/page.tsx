@@ -375,7 +375,7 @@ export default async function BuyerOrdersPage({
                               href={order.returnLabelUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900"
+                              className="shipment-action-button shipment-action-button--amber"
                             >
                               Open Return Label PDF
                             </a>
@@ -385,7 +385,7 @@ export default async function BuyerOrdersPage({
                               href={order.returnQrCodeUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900"
+                              className="shipment-action-button shipment-action-button--amber"
                             >
                               Open Return Carrier QR
                             </a>
@@ -393,7 +393,7 @@ export default async function BuyerOrdersPage({
                           <form action={emailBuyerReturnLabelAction} className="contents">
                             <input type="hidden" name="orderId" value={order.id} />
                             <input type="hidden" name="returnTo" value="/buyer/orders" />
-                            <button className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900">
+                            <button className="shipment-action-button shipment-action-button--amber">
                               {order.returnQrCodeUrl ? "Email Label & QR" : "Email Label"}
                             </button>
                           </form>

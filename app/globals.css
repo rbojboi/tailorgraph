@@ -154,6 +154,15 @@ h4 {
   border-color: rgb(4 120 87);
 }
 
+.shipment-action-button--amber {
+  border: 1px solid rgb(252 211 77);
+  color: rgb(69 26 3);
+}
+
+.shipment-action-button--amber:hover {
+  border-color: rgb(120 53 15);
+}
+
 .marketplace-context-bar {
   background: transparent;
   border: 0;
