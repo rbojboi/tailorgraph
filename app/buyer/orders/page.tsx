@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { openIssueAction } from "@/app/actions";
+import { emailBuyerReturnLabelAction, openIssueAction } from "@/app/actions";
 import { BuyerPurchaseActionsMenu } from "@/components/buyer-purchase-actions-menu";
 import { BuyerPurchaseFilterControl } from "@/components/buyer-purchase-filter-control";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
@@ -259,6 +259,11 @@ export default async function BuyerOrdersPage({
             Return label and QR created.
           </div>
         ) : null}
+        {saved === "return-label-email" ? (
+          <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+            Return Label & QR Sent to Email.
+          </div>
+        ) : null}
         {authError ? (
           <div className="rounded-2xl bg-rose-100 px-4 py-3 text-sm text-rose-900">
             {authError}
@@ -385,6 +390,13 @@ export default async function BuyerOrdersPage({
                               Open Return Carrier QR
                             </a>
                           ) : null}
+                          <form action={emailBuyerReturnLabelAction} className="contents">
+                            <input type="hidden" name="orderId" value={order.id} />
+                            <input type="hidden" name="returnTo" value="/buyer/orders" />
+                            <button className="rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900">
+                              {order.returnQrCodeUrl ? "Email Label & QR" : "Email Label"}
+                            </button>
+                          </form>
                         </div>
                       ) : null}
                     </div>

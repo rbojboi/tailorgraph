@@ -623,6 +623,55 @@ function shipmentSellerEmail(context: OrderNotificationContext) {
   };
 }
 
+function returnLabelBuyerEmail(context: OrderNotificationContext) {
+  const { order, seller } = context;
+  const buyerUrl = `${getAppUrl()}/buyer/orders`;
+  const tracking = order.returnTrackingNumber
+    ? `${order.returnCarrier || "Carrier"} - ${order.returnTrackingNumber}`
+    : "Tracking pending";
+
+  return {
+    subject: `TailorGraph return label ready: ${order.listingTitle}`,
+    text: `Your TailorGraph return label is ready.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\nReturn Label PDF: ${order.returnLabelUrl || "Not available"}\nCarrier QR: ${order.returnQrCodeUrl || "Not available for this label"}\n\nMy Purchases: ${buyerUrl}`,
+    html: renderEmailLayout({
+      eyebrow: "Buyer Returns",
+      title: "Your return label is ready",
+      introParagraphs: [
+        "Your return shipping materials are ready.",
+        order.returnQrCodeUrl
+          ? "Use the PDF if you want to print the label, or use the carrier QR if the counter accepts QR drop-off."
+          : "Use the PDF to print the label. Shippo did not return a carrier QR code for this label."
+      ],
+      details: [
+        { label: "Item", value: order.listingTitle },
+        { label: "Seller", value: `@${seller.username || order.sellerName}` },
+        { label: "Return tracking", value: tracking },
+        { label: "QR", value: order.returnQrCodeUrl ? "Available" : "Not available for this label" }
+      ],
+      primaryAction: order.returnLabelUrl
+        ? {
+            label: "Open Return Label PDF",
+            url: order.returnLabelUrl
+          }
+        : {
+            label: "Open My Purchases",
+            url: buyerUrl
+          },
+      secondaryAction: order.returnQrCodeUrl
+        ? {
+            label: "Open Carrier QR",
+            url: order.returnQrCodeUrl
+          }
+        : order.returnTrackingUrl
+          ? {
+              label: "Track Return",
+              url: order.returnTrackingUrl
+            }
+          : undefined
+    })
+  };
+}
+
 function shipmentBuyerSms(context: OrderNotificationContext) {
   const { order } = context;
   return `TailorGraph: your order for "${order.listingTitle}" has shipped.${order.trackingNumber ? ` Tracking: ${order.trackingNumber}.` : ""} View updates in My Purchases.`;
@@ -845,6 +894,21 @@ export async function sendSellerShipmentLabelNotification(
     category: "seller_orders",
     skipDedupe: options?.skipDedupe,
     ...sellerEmail
+  });
+}
+
+export async function sendBuyerReturnLabelNotification(
+  context: OrderNotificationContext,
+  options?: { eventKey?: string; skipDedupe?: boolean }
+) {
+  const buyerEmail = returnLabelBuyerEmail(context);
+  await sendEmailNotification({
+    eventKey: options?.eventKey ?? `return:${context.order.id}:buyer_label_email`,
+    eventType: "buyer_return_label",
+    to: context.buyer.email,
+    category: "buyer_orders",
+    skipDedupe: options?.skipDedupe,
+    ...buyerEmail
   });
 }
 

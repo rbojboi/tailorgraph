@@ -88,6 +88,7 @@ import {
   type EmailSenderCategory,
   sendDirectMessageNotification,
   sendEmailVerificationNotification,
+  sendBuyerReturnLabelNotification,
   sendNewListingFollowerNotification,
   sendOrderShippedNotifications,
   sendPasswordResetNotification,
@@ -3835,6 +3836,45 @@ export async function emailSellerShipmentLabelAction(formData: FormData) {
   );
 
   redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=shipment-email`);
+}
+
+export async function emailBuyerReturnLabelAction(formData: FormData) {
+  redirectIfDatabaseUnavailable("/buyer/orders?authError=Add+DATABASE_URL+to+email+return+labels");
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/?authError=Please+log+in");
+  }
+
+  const orderId = stringValue(formData, "orderId");
+  const returnTo = stringValue(formData, "returnTo") || "/buyer/orders";
+  const order = await findOrderById(orderId);
+  if (!order || order.buyerId !== user.id) {
+    redirect("/buyer/orders?authError=Order+not+found");
+  }
+
+  if (!order.returnLabelUrl && !order.returnQrCodeUrl) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=No+return+label+or+QR+is+available+for+this+order+yet`);
+  }
+
+  const [seller, listing] = await Promise.all([findUserById(order.sellerId), findListingById(order.listingId)]);
+  if (!seller) {
+    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Seller+account+not+found+for+this+order`);
+  }
+
+  await sendBuyerReturnLabelNotification(
+    {
+      order,
+      listing,
+      buyer: user,
+      seller
+    },
+    {
+      eventKey: `return:${order.id}:buyer_label_email:${randomUUID()}`,
+      skipDedupe: true
+    }
+  );
+
+  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label-email`);
 }
 
 export async function confirmDeliveryAction(formData: FormData) {
