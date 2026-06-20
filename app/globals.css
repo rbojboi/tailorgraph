@@ -113,17 +113,24 @@ h4 {
 }
 
 .shipment-action-button {
+  appearance: none;
+  -webkit-appearance: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
   background: white;
+  margin: 0;
   padding: 0.5rem 1rem;
   font-family: inherit !important;
   font-size: 0.875rem !important;
   font-weight: 600 !important;
-  line-height: 1.5 !important;
+  line-height: 1.25rem !important;
+  letter-spacing: inherit;
+  text-align: center;
   text-decoration: none;
+  text-transform: none;
+  white-space: nowrap;
   transition:
     border-color 150ms ease,
     color 150ms ease;
