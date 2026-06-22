@@ -4,6 +4,7 @@ import {
   buyShippoLabelAction,
   confirmReturnAction,
   emailSellerShipmentLabelAction,
+  openIssueAction,
   shipOrderAction
 } from "@/app/actions";
 import { AppShell, Input, PageWrap, SectionTitle, Spec } from "@/components/ui";
@@ -93,6 +94,7 @@ export default async function SellerOrderFulfillmentPage({
   const canConfirmReturn =
     returnFlowActive &&
     order.returnsAccepted &&
+    order.returnPolicy === "seller_approval" &&
     !hasReturnProviderLabel &&
     order.returnStatus !== "approved" &&
     order.returnStatus !== "label_created";
@@ -371,6 +373,20 @@ export default async function SellerOrderFulfillmentPage({
                           />
                           <Spec label="Return ETA" value={formatDateLabel(order.returnEta)} />
                         </div>
+                        {order.returnStatus === "received" ? (
+                          <form action={openIssueAction} className="mt-4 rounded-[1.25rem] border border-amber-200 bg-white p-4">
+                            <input type="hidden" name="orderId" value={order.id} />
+                            <input type="hidden" name="issueReason" value="Problem with returned item reported by seller" />
+                            <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
+                            <p className="text-sm font-semibold text-stone-950">Problem with returned item?</p>
+                            <p className="mt-2 text-sm leading-6 text-stone-700">
+                              Report damage, missing pieces, or a mismatch so TailorGraph can review the dispute before refund completion.
+                            </p>
+                            <button className="mt-4 rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900">
+                              Report Return Issue
+                            </button>
+                          </form>
+                        ) : null}
                       </>
                     ) : null}
                   </div>

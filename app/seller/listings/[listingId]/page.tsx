@@ -14,6 +14,17 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function getReturnPolicyLabel(policy: string) {
+  switch (policy) {
+    case "automatic_returns":
+      return "Automatic returns";
+    case "seller_approval":
+      return "Returns with seller approval";
+    default:
+      return "No returns";
+  }
+}
+
 export default async function SellerListingPage({ params, searchParams }: PageProps) {
   const { listingId } = await params;
   const filters = await searchParams;
@@ -96,7 +107,7 @@ export default async function SellerListingPage({ params, searchParams }: PagePr
               <Spec label="Country of Origin" value={formatDisplayValue(listing.countryOfOrigin)} />
               <Spec label="Fabric" value={formatDisplayValue(listing.material)} />
               <Spec label="Pattern" value={formatDisplayValue(listing.pattern)} />
-              <Spec label="Returns Accepted" value={listing.returnsAccepted ? "Yes" : "No"} />
+              <Spec label="Return Policy" value={getReturnPolicyLabel(listing.returnPolicy)} />
               <Spec label="Seller Location" value={listing.location} />
               <Spec label="Allow Offers" value={listing.allowOffers ? "Yes" : "No"} />
             </div>

@@ -944,10 +944,14 @@ export function SellerListingForm({
         />
         <Select
           name="returnsAccepted"
-          label="Accept Returns?"
-          defaultValue={listing?.returnsAccepted ? "yes" : "no"}
+          label="Return Policy"
+          defaultValue={listing?.returnPolicy ?? (listing?.returnsAccepted ? "seller_approval" : "no_returns")}
           required
-          options={[["yes", "Yes"], ["no", "No"]]}
+          options={[
+            ["automatic_returns", "Automatic returns"],
+            ["seller_approval", "Returns with seller approval"],
+            ["no_returns", "No returns"]
+          ]}
         />
 
       <div className="sm:col-span-2 flex flex-wrap gap-3">

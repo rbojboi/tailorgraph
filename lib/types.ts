@@ -221,6 +221,7 @@ export type OrderStatus =
   | "failed";
 
 export type OfferStatus = "active" | "accepted" | "rejected";
+export type ReturnPolicy = "no_returns" | "seller_approval" | "automatic_returns";
 
 export type SupportRequestKind = "support" | "dispute";
 
@@ -446,6 +447,7 @@ export type Listing = {
     | "used_poor";
   vintage: "modern" | "vintage_1970_2000" | "vintage_1940_1970" | "vintage_pre_1940";
   returnsAccepted: boolean;
+  returnPolicy: ReturnPolicy;
   allowOffers: boolean;
   price: number;
   shippingPrice: number;
@@ -483,6 +485,7 @@ export type Order = {
   status: OrderStatus;
   listingStatus: ListingStatus | null;
   returnsAccepted: boolean;
+  returnPolicy: ReturnPolicy;
   stripeCheckoutSessionId: string | null;
   stripePaymentIntentId: string | null;
   shippingAddress: ShippingAddress;

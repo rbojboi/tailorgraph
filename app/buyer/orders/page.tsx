@@ -262,6 +262,11 @@ export default async function BuyerOrdersPage({
             Your request has been sent to the seller for review.
           </div>
         ) : null}
+        {saved === "return-approved" ? (
+          <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+            Return approved. You can choose a return label when you are ready to ship the item back.
+          </div>
+        ) : null}
         {saved === "return-label" ? (
           <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
             Return label and QR created.

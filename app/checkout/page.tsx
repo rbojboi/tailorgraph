@@ -42,6 +42,17 @@ function formatEstimatedArrivalRange(startBusinessDays: number, endBusinessDays:
   return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
+function getReturnPolicyLabel(policy: string) {
+  switch (policy) {
+    case "automatic_returns":
+      return "Automatic returns";
+    case "seller_approval":
+      return "Returns with seller approval";
+    default:
+      return "No returns";
+  }
+}
+
 export default async function CheckoutPage({
   searchParams
 }: {
@@ -184,7 +195,7 @@ export default async function CheckoutPage({
                         <span>Item Price: {formatCurrency(listing.price)}</span>
                         <span>Shipping: {formatCurrency(listing.shippingPrice)}</span>
                         <span>Allows Offers: {listing.allowOffers ? "Yes" : "No"}</span>
-                        <span>Accepts Returns: {listing.returnsAccepted ? "Yes" : "No"}</span>
+                        <span>Returns: {getReturnPolicyLabel(listing.returnPolicy)}</span>
                         <span>Estimated Arrival: {estimatedArrival}</span>
                       </div>
                     </div>

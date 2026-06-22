@@ -15,6 +15,7 @@ import type {
   OrderReview,
   OrderStatus,
   PublicLocationMode,
+  ReturnPolicy,
   Role,
   SavedSearch,
   SellerReviewScores,
@@ -82,7 +83,7 @@ const defaultNotificationPreferences: User["notificationPreferences"] = {
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 33;
+const SCHEMA_VERSION = 34;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -109,6 +110,14 @@ function normalizeVintageEra(value: unknown): Listing["vintage"] {
   }
 
   return "modern";
+}
+
+function normalizeReturnPolicy(value: unknown, fallbackAccepted?: boolean): ReturnPolicy {
+  if (value === "automatic_returns" || value === "seller_approval" || value === "no_returns") {
+    return value;
+  }
+
+  return fallbackAccepted ? "seller_approval" : "no_returns";
 }
 
 function normalizeStoredSizeLabel(value: string) {
@@ -299,6 +308,7 @@ async function initSchema() {
       condition TEXT NOT NULL,
       vintage TEXT NOT NULL DEFAULT 'modern',
       returns_accepted BOOLEAN NOT NULL DEFAULT FALSE,
+      return_policy TEXT NOT NULL DEFAULT 'no_returns',
       allow_offers BOOLEAN NOT NULL DEFAULT TRUE,
       price DOUBLE PRECISION NOT NULL,
       shipping_price DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -332,6 +342,7 @@ async function initSchema() {
       shipping_amount DOUBLE PRECISION NOT NULL DEFAULT 0,
       payment_method TEXT NOT NULL,
       status TEXT NOT NULL,
+      return_policy TEXT NOT NULL DEFAULT 'no_returns',
       stripe_checkout_session_id TEXT,
       stripe_payment_intent_id TEXT,
       shipping_full_name TEXT,
@@ -526,6 +537,7 @@ async function initSchema() {
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS country_origin TEXT NOT NULL DEFAULT 'unknown';
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS vintage TEXT NOT NULL DEFAULT 'modern';
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS returns_accepted BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE listings ADD COLUMN IF NOT EXISTS return_policy TEXT NOT NULL DEFAULT 'no_returns';
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS allow_offers BOOLEAN NOT NULL DEFAULT TRUE;
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS jacket_measurements JSONB;
     ALTER TABLE listings ADD COLUMN IF NOT EXISTS jacket_specs JSONB;
@@ -546,6 +558,7 @@ async function initSchema() {
     ALTER TABLE message_threads ADD COLUMN IF NOT EXISTS buyer_deleted_at TIMESTAMPTZ;
     ALTER TABLE message_threads ADD COLUMN IF NOT EXISTS seller_deleted_at TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_policy TEXT NOT NULL DEFAULT 'no_returns';
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_url TEXT;
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_status TEXT;
@@ -570,6 +583,23 @@ async function initSchema() {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS return_status TEXT;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS measurement_rating INTEGER;
     ALTER TABLE order_reviews ADD COLUMN IF NOT EXISTS condition_rating INTEGER;
+  `);
+
+  await client.query(`
+    UPDATE listings
+    SET return_policy = 'seller_approval'
+    WHERE returns_accepted = TRUE
+      AND return_policy = 'no_returns';
+
+    UPDATE orders
+    SET return_policy = 'seller_approval'
+    WHERE return_policy = 'no_returns'
+      AND EXISTS (
+        SELECT 1
+        FROM listings
+        WHERE listings.id = orders.listing_id
+          AND listings.returns_accepted = TRUE
+      );
   `);
 
   await client.query(`
@@ -842,7 +872,8 @@ function mapListing(row: Record<string, unknown>): Listing {
     fabricWeave: (row.fabric_weave as Listing["fabricWeave"]) || "na",
     condition: row.condition as Listing["condition"],
     vintage: normalizeVintageEra(row.vintage),
-    returnsAccepted: Boolean(row.returns_accepted),
+    returnsAccepted: Boolean(row.returns_accepted) || normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)) !== "no_returns",
+    returnPolicy: normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)),
     allowOffers: Boolean(row.allow_offers),
     price: Number(row.price),
     shippingPrice: Number(row.shipping_price ?? 0),
@@ -891,7 +922,8 @@ function mapOrder(row: Record<string, unknown>): Order {
     paymentMethod: row.payment_method as Order["paymentMethod"],
     status: row.status as OrderStatus,
     listingStatus: row.listing_status ? (String(row.listing_status) as ListingStatus) : null,
-    returnsAccepted: Boolean(row.returns_accepted),
+    returnsAccepted: Boolean(row.returns_accepted) || normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)) !== "no_returns",
+    returnPolicy: normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)),
     stripeCheckoutSessionId: row.stripe_checkout_session_id
       ? String(row.stripe_checkout_session_id)
       : null,
@@ -1182,6 +1214,7 @@ export async function ensureSeedData(): Promise<void> {
       condition: "used_excellent",
       vintage: "modern",
       returnsAccepted: false,
+      returnPolicy: "no_returns",
       allowOffers: true,
       price: 940,
       shippingPrice: 0,
@@ -1253,6 +1286,7 @@ export async function ensureSeedData(): Promise<void> {
       condition: "used_very_good",
       vintage: "modern",
       returnsAccepted: false,
+      returnPolicy: "no_returns",
       allowOffers: true,
       price: 590,
       shippingPrice: 18,
@@ -1312,6 +1346,7 @@ export async function ensureSeedData(): Promise<void> {
       condition: "used_good",
       vintage: "modern",
       returnsAccepted: false,
+      returnPolicy: "no_returns",
       allowOffers: true,
       price: 420,
       shippingPrice: 20,
@@ -1365,12 +1400,12 @@ export async function ensureSeedData(): Promise<void> {
     await client.query(
       `INSERT INTO listings (
         id, seller_id, seller_display_name, title, brand, category, size_label, trouser_size_label, chest, shoulder, waist, sleeve, inseam,
-        outseam, material, pattern, primary_color, country_origin, lapel, fabric_weight, fabric_type, fabric_weave, condition, vintage, returns_accepted, allow_offers,
+        outseam, material, pattern, primary_color, country_origin, lapel, fabric_weight, fabric_type, fabric_weave, condition, vintage, returns_accepted, return_policy, allow_offers,
         price, shipping_price, shipping_included, shipping_method, processing_days,
         location, distance_miles, description, media, jacket_measurements, jacket_specs,
         waistcoat_measurements, waistcoat_specs, trouser_measurements, trouser_specs, status, created_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,NOW()
       )`,
       [
         randomUUID(),
@@ -1398,6 +1433,7 @@ export async function ensureSeedData(): Promise<void> {
         listing.condition,
         listing.vintage,
         listing.returnsAccepted,
+        listing.returnsAccepted ? "seller_approval" : "no_returns",
         listing.allowOffers,
         listing.price,
         listing.shippingPrice,
@@ -1963,12 +1999,12 @@ export async function createListing(
   const result = await client.query(
     `INSERT INTO listings (
       id, seller_id, seller_display_name, title, brand, category, size_label, trouser_size_label, chest, shoulder, waist, sleeve, inseam,
-      outseam, material, pattern, primary_color, country_origin, lapel, fabric_weight, fabric_type, fabric_weave, condition, vintage, returns_accepted, allow_offers,
+      outseam, material, pattern, primary_color, country_origin, lapel, fabric_weight, fabric_type, fabric_weave, condition, vintage, returns_accepted, return_policy, allow_offers,
       price, shipping_price, shipping_included, shipping_method, processing_days,
       location, distance_miles, description, media, jacket_measurements, jacket_specs,
       waistcoat_measurements, waistcoat_specs, trouser_measurements, trouser_specs, status, created_at
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,NOW()
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,NOW()
     ) RETURNING *`,
     [
       id,
@@ -1996,6 +2032,7 @@ export async function createListing(
       input.condition,
       input.vintage,
       input.returnsAccepted,
+      input.returnPolicy,
       input.allowOffers,
       input.price,
       input.shippingPrice,
@@ -2062,23 +2099,24 @@ export async function updateListing(
       condition = $21,
       vintage = $22,
       returns_accepted = $23,
-      allow_offers = $24,
-      price = $25,
-      shipping_price = $26,
-      shipping_included = $27,
-      shipping_method = $28,
-      processing_days = $29,
-      location = $30,
-      distance_miles = $31,
-      description = $32,
-      media = $33,
-      jacket_measurements = $34,
-      jacket_specs = $35,
-      waistcoat_measurements = $36,
-      waistcoat_specs = $37,
-      trouser_measurements = $38,
-      trouser_specs = $39,
-      status = $40
+      return_policy = $24,
+      allow_offers = $25,
+      price = $26,
+      shipping_price = $27,
+      shipping_included = $28,
+      shipping_method = $29,
+      processing_days = $30,
+      location = $31,
+      distance_miles = $32,
+      description = $33,
+      media = $34,
+      jacket_measurements = $35,
+      jacket_specs = $36,
+      waistcoat_measurements = $37,
+      waistcoat_specs = $38,
+      trouser_measurements = $39,
+      trouser_specs = $40,
+      status = $41
      WHERE id = $1
      RETURNING *`,
     [
@@ -2105,6 +2143,7 @@ export async function updateListing(
       input.condition,
       input.vintage,
       input.returnsAccepted,
+      input.returnPolicy,
       input.allowOffers,
       input.price,
       input.shippingPrice,
@@ -2178,13 +2217,13 @@ export async function createOrder(
   const result = await client.query(
     `INSERT INTO orders (
       id, buyer_id, buyer_name, seller_id, seller_name, listing_id, listing_title, amount, subtotal, shipping_amount,
-      payment_method, status, stripe_checkout_session_id, stripe_payment_intent_id,
+      payment_method, status, return_policy, stripe_checkout_session_id, stripe_payment_intent_id,
       shipping_full_name, shipping_line1, shipping_line2, shipping_city, shipping_state, shipping_postal_code, shipping_country,
       shipping_method, carrier, tracking_number, tracking_url, tracking_status, shipping_eta, shipping_label_url,
       shipping_qr_code_url, shipping_provider, shipping_provider_shipment_id, shipping_provider_rate_id, shipping_provider_transaction_id,
       issue_reason, seller_notes, shipped_at, delivered_at, created_at
     ) VALUES (
-      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,NOW()
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,NOW()
     ) RETURNING *`,
     [
       id,
@@ -2199,6 +2238,7 @@ export async function createOrder(
       input.shippingAmount,
       input.paymentMethod,
       input.status,
+      input.returnPolicy,
       input.stripeCheckoutSessionId,
       input.stripePaymentIntentId,
       input.shippingAddress.fullName,

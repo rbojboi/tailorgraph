@@ -59,6 +59,7 @@ function buildStrictJacketListing(jacket: JacketMeasurements): ListingSeed {
     condition: "used_excellent",
     vintage: "modern",
     returnsAccepted: true,
+    returnPolicy: "seller_approval",
     allowOffers: true,
     price: 255,
     shippingPrice: 15,

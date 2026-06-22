@@ -121,6 +121,7 @@ import type {
   ListingMedia,
   ListingStatus,
   PublicLocationMode,
+  ReturnPolicy,
   Role,
   ShirtSpecs,
   ShippingAddress,
@@ -135,6 +136,14 @@ import type {
 
 function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
+}
+
+function normalizeReturnPolicyInput(value: string): ReturnPolicy {
+  if (value === "automatic_returns" || value === "seller_approval" || value === "no_returns") {
+    return value;
+  }
+
+  return value === "yes" ? "seller_approval" : "no_returns";
 }
 
 const supportRequestTopics: SupportRequestTopic[] = [
@@ -410,7 +419,8 @@ function buildListingPayloadFromDraft(
       fabricWeave: (sellerDraftStringValue(draft, "fabricWeave") || "na") as Listing["fabricWeave"],
       condition: sellerDraftStringValue(draft, "condition") as Listing["condition"],
       vintage: (sellerDraftStringValue(draft, "vintage") || "modern") as Listing["vintage"],
-      returnsAccepted: sellerDraftStringValue(draft, "returnsAccepted") === "yes",
+      returnsAccepted: normalizeReturnPolicyInput(sellerDraftStringValue(draft, "returnsAccepted")) !== "no_returns",
+      returnPolicy: normalizeReturnPolicyInput(sellerDraftStringValue(draft, "returnsAccepted")),
       allowOffers: sellerDraftStringValue(draft, "allowOffers") === "yes",
       price: sellerDraftNumberValue(draft, "price"),
       shippingPrice: estimateShippingCost(category, sizeLabel),
@@ -2688,7 +2698,8 @@ export async function createListingAction(formData: FormData) {
       | "used_fair"
       | "used_poor",
     vintage: (stringValue(formData, "vintage") || "modern") as Listing["vintage"],
-    returnsAccepted: stringValue(formData, "returnsAccepted") === "yes",
+    returnsAccepted: normalizeReturnPolicyInput(stringValue(formData, "returnsAccepted")) !== "no_returns",
+    returnPolicy: normalizeReturnPolicyInput(stringValue(formData, "returnsAccepted")),
     allowOffers: stringValue(formData, "allowOffers") === "yes",
     price: numberValue(formData, "price"),
     shippingPrice: estimateShippingCost(category, sizeLabel),
@@ -2943,7 +2954,8 @@ export async function updateListingAction(formData: FormData) {
       | "used_fair"
       | "used_poor",
     vintage: (stringValue(formData, "vintage") || "modern") as Listing["vintage"],
-    returnsAccepted: stringValue(formData, "returnsAccepted") === "yes",
+    returnsAccepted: normalizeReturnPolicyInput(stringValue(formData, "returnsAccepted")) !== "no_returns",
+    returnPolicy: normalizeReturnPolicyInput(stringValue(formData, "returnsAccepted")),
     allowOffers: stringValue(formData, "allowOffers") === "yes",
     price: numberValue(formData, "price"),
     shippingPrice: estimateShippingCost(category, sizeLabel),
@@ -3184,6 +3196,7 @@ export async function startStripeCheckoutAction(formData: FormData) {
     status: "pending_payment",
     listingStatus: listing.status,
     returnsAccepted: listing.returnsAccepted,
+    returnPolicy: listing.returnPolicy,
     stripeCheckoutSessionId: null,
     stripePaymentIntentId: null,
     shippingAddress,
@@ -3329,6 +3342,7 @@ export async function startCartStripeCheckoutAction(formData: FormData) {
         status: "pending_payment",
         listingStatus: listing.status,
         returnsAccepted: listing.returnsAccepted,
+        returnPolicy: listing.returnPolicy,
         stripeCheckoutSessionId: null,
         stripePaymentIntentId: null,
         shippingAddress,
@@ -4018,7 +4032,15 @@ export async function openIssueAction(formData: FormData) {
     redirect("/?authError=Order+not+found");
   }
 
+  const isReturnRequest = reason.toLowerCase().includes("return");
+  if (isReturnRequest && !order.returnsAccepted) {
+    redirect(`${returnTo || "/buyer/orders"}${(returnTo || "/buyer/orders").includes("?") ? "&" : "?"}authError=This+order+does+not+accept+returns.+You+can+report+an+issue+instead.`);
+  }
+
   await updateOrderIssue(orderId, "issue_open", reason || "Issue reported", null);
+  if (isReturnRequest && order.returnPolicy === "automatic_returns") {
+    await updateOrderReturnStatus(orderId, "approved", null);
+  }
   const supportRequest = await createSupportRequest({
     userId: user.id,
     requesterName: user.name,
@@ -4040,6 +4062,10 @@ export async function openIssueAction(formData: FormData) {
   revalidatePath(`/seller/orders/${orderId}`);
   revalidatePath("/admin");
   revalidatePath("/support");
+  if (isReturnRequest && order.returnPolicy === "automatic_returns") {
+    redirect(withUpdatedQueryParam(returnTo || "/buyer/orders", "saved", "return-approved"));
+  }
+
   redirect(returnTo || `/${order.buyerId === user.id ? "buyer" : "seller"}?saved=issue`);
 }
 

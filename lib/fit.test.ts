@@ -66,6 +66,7 @@ function makeListing(overrides: Partial<Listing> = {}): Listing {
     condition: "used_excellent",
     vintage: "modern",
     returnsAccepted: true,
+    returnPolicy: "seller_approval",
     allowOffers: true,
     price: 100,
     shippingPrice: 10,

@@ -19,6 +19,7 @@ function buildOrder(overrides: Partial<Order> = {}): Order {
     status: "processing",
     listingStatus: "sold",
     returnsAccepted: true,
+    returnPolicy: "seller_approval",
     stripeCheckoutSessionId: "cs_test_123",
     stripePaymentIntentId: "pi_test_123",
     shippingAddress: {
@@ -96,6 +97,7 @@ function buildListing(overrides: Partial<Listing> = {}): Listing {
     condition: "used_excellent",
     vintage: "modern",
     returnsAccepted: true,
+    returnPolicy: "seller_approval",
     allowOffers: true,
     price: 400,
     shippingPrice: 25,

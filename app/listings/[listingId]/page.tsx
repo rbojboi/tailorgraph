@@ -18,6 +18,17 @@ function DetailField({ label, value }: { label: string; value?: string }) {
   );
 }
 
+function getReturnPolicyLabel(policy: string) {
+  switch (policy) {
+    case "automatic_returns":
+      return "Automatic returns";
+    case "seller_approval":
+      return "Returns with seller approval";
+    default:
+      return "No returns";
+  }
+}
+
 function DetailSection({
   title,
   fields
@@ -627,8 +638,8 @@ export default async function ListingDetail({
                 <p className="mt-2 text-sm font-semibold text-stone-200">{estimatedArrival}</p>
               </div>
               <div className="border-t border-stone-700 pt-4">
-                <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Accepts Returns</p>
-                <p className="mt-2 text-sm font-semibold text-stone-200">{listing.returnsAccepted ? "Yes" : "No"}</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-stone-400">Returns</p>
+                <p className="mt-2 text-sm font-semibold text-stone-200">{getReturnPolicyLabel(listing.returnPolicy)}</p>
               </div>
               <div className="mt-5 flex flex-col gap-3">
                 <form action={addToCartAction}>
