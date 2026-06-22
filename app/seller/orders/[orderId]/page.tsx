@@ -129,10 +129,22 @@ export default async function SellerOrderFulfillmentPage({
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                   <p className="eyebrow text-xs text-amber-800">
-                    {hasReturnProviderLabel ? "Return Label Ready" : "Return Requested"}
+                    {order.returnStatus === "received"
+                      ? "Return Received"
+                      : order.returnStatus === "in_transit"
+                        ? "Return In Transit"
+                        : hasReturnProviderLabel
+                          ? "Return Label Ready"
+                          : "Return Requested"}
                   </p>
                   <h2 className="mt-2 text-2xl font-semibold text-amber-950">
-                    {hasReturnProviderLabel ? "Return materials are ready" : "Buyer requested a return"}
+                    {order.returnStatus === "received"
+                      ? "Return package received"
+                      : order.returnStatus === "in_transit"
+                        ? "Return package is on its way back"
+                        : hasReturnProviderLabel
+                          ? "Return materials are ready"
+                          : "Buyer requested a return"}
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-900">
                     {order.issueReason || "This order has an active return or issue request."}

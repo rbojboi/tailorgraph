@@ -210,7 +210,11 @@ export default async function SellerPage({
                     const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
                     const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
                     const returnAlertTitle = hasReturnProviderLabel
-                      ? "Return label ready"
+                      ? order.returnStatus === "received"
+                        ? "Return received"
+                        : order.returnStatus === "in_transit"
+                          ? "Return in transit"
+                          : "Return label ready"
                       : order.returnStatus === "approved"
                         ? "Return confirmed"
                         : "Return requested";
@@ -234,7 +238,11 @@ export default async function SellerPage({
                               <p className="text-sm font-semibold text-amber-950">{returnAlertTitle}</p>
                               <p className="mt-1 text-sm leading-6 text-amber-900">
                                 {hasReturnProviderLabel
-                                  ? "The buyer return label has been created."
+                                  ? order.returnStatus === "received"
+                                    ? "The return package has arrived back to you."
+                                    : order.returnStatus === "in_transit"
+                                      ? "The buyer return package is on its way back to you."
+                                      : "The buyer return label has been created."
                                   : order.returnStatus === "approved"
                                     ? "Waiting for the buyer to create the return label."
                                     : order.issueReason || "This order has an active return or issue request."}

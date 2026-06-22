@@ -2425,6 +2425,58 @@ export async function updateOrderTrackingFromProvider(
   );
 }
 
+export async function updateOrderReturnTrackingFromProvider(
+  orderId: string,
+  input: {
+    carrier: string | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    trackingStatus: string | null;
+    returnEta: string | null;
+  }
+): Promise<void> {
+  await ensureSchema();
+
+  const normalizedStatus = (input.trackingStatus || "").trim().replace(/-/g, "_").toUpperCase();
+  const returnStatus =
+    normalizedStatus === "DELIVERED"
+      ? "received"
+      : normalizedStatus === "TRANSIT"
+        ? "in_transit"
+        : normalizedStatus
+          ? "label_created"
+          : null;
+
+  await requirePool().query(
+    `UPDATE orders
+     SET return_carrier = COALESCE($1, return_carrier),
+         return_tracking_number = COALESCE($2, return_tracking_number),
+         return_tracking_url = COALESCE($3, return_tracking_url),
+         return_tracking_status = COALESCE($4, return_tracking_status),
+         return_eta = COALESCE($5::timestamptz, return_eta),
+         return_status = CASE
+           WHEN $6 = 'received' THEN 'received'
+           WHEN $6 = 'in_transit' AND return_status NOT IN ('received', 'closed') THEN 'in_transit'
+           WHEN $6 = 'label_created' AND return_status IS NULL THEN 'label_created'
+           ELSE return_status
+         END,
+         status = CASE
+           WHEN status NOT IN ('canceled', 'refunded', 'failed') THEN 'issue_open'
+           ELSE status
+         END
+     WHERE id = $7`,
+    [
+      input.carrier,
+      input.trackingNumber,
+      input.trackingUrl,
+      input.trackingStatus,
+      input.returnEta,
+      returnStatus,
+      orderId
+    ]
+  );
+}
+
 export async function updateOrderIssue(
   orderId: string,
   status: OrderStatus,
@@ -2517,6 +2569,34 @@ export async function findOrderByShippingProviderTransactionId(transactionId: st
      LEFT JOIN listings ON listings.id = orders.listing_id
      LEFT JOIN order_reviews ON order_reviews.order_id = orders.id
      WHERE orders.shipping_provider_transaction_id = $1
+     LIMIT 1`,
+    [transactionId]
+  );
+
+  return result.rows[0] ? mapOrder(result.rows[0]) : null;
+}
+
+export async function findOrderByReturnProviderTransactionId(transactionId: string): Promise<Order | null> {
+  if (!databaseConfigured) {
+    return null;
+  }
+
+  await ensureSchema();
+  const result = await requirePool().query(
+    `SELECT
+       orders.*,
+       listings.returns_accepted,
+       listings.status AS listing_status,
+       order_reviews.overall_rating AS review_overall_rating,
+       order_reviews.measurement_rating AS review_measurement_rating,
+       order_reviews.condition_rating AS review_condition_rating,
+       order_reviews.shipping_rating AS review_shipping_rating,
+       order_reviews.communication_rating AS review_communication_rating,
+       order_reviews.feedback AS review_feedback
+     FROM orders
+     LEFT JOIN listings ON listings.id = orders.listing_id
+     LEFT JOIN order_reviews ON order_reviews.order_id = orders.id
+     WHERE orders.return_provider_transaction_id = $1
      LIMIT 1`,
     [transactionId]
   );

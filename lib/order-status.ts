@@ -54,6 +54,14 @@ export function getSellerOrderStatusLabel(order: OrderStatusDisplaySource) {
   }
 
   if (order.status === "issue_open") {
+    if (order.returnStatus === "received") {
+      return "Return Received";
+    }
+
+    if (order.returnStatus === "in_transit") {
+      return "Return In Transit";
+    }
+
     if (order.returnStatus === "label_created") {
       return "Return Label Created";
     }

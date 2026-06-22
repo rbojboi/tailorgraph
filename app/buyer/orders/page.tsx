@@ -78,6 +78,14 @@ function getBuyerPurchaseStatus(order: { status: string; returnsAccepted: boolea
     return "Canceled";
   }
 
+  if (order.returnStatus === "received") {
+    return "Return Received";
+  }
+
+  if (order.returnStatus === "in_transit") {
+    return "Return In Transit";
+  }
+
   if (order.returnStatus === "label_created") {
     return "Return Label Created";
   }
@@ -342,6 +350,10 @@ export default async function BuyerOrdersPage({
                           <p className="text-sm font-semibold text-amber-950">
                             {order.returnStatus === "label_created"
                               ? "Return label ready"
+                              : order.returnStatus === "in_transit"
+                                ? "Return in transit"
+                                : order.returnStatus === "received"
+                                  ? "Return received"
                               : order.returnStatus === "approved"
                                 ? "Return approved"
                                 : "Return requested"}
@@ -349,6 +361,10 @@ export default async function BuyerOrdersPage({
                           <p className="mt-1 text-sm leading-6 text-amber-900">
                             {order.returnStatus === "label_created"
                               ? "Use the return label or carrier QR to send the item back."
+                              : order.returnStatus === "in_transit"
+                                ? "The return package is on its way back to the seller."
+                                : order.returnStatus === "received"
+                                  ? "The seller has received the return package. Refund or dispute review is the next step."
                               : order.returnStatus === "approved"
                                 ? "Create the return label when you are ready to ship the item back."
                                 : "The seller needs to confirm the return before a label can be created."}
