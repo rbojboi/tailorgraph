@@ -353,6 +353,10 @@ export default async function BuyerOrdersPage({
                                 ? "Create the return label when you are ready to ship the item back."
                                 : "The seller needs to confirm the return before a label can be created."}
                           </p>
+                          <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-amber-950">
+                            Return requested by you. We will keep this return open while the item is on its way back
+                            to the seller.
+                          </p>
                         </div>
                         {order.returnStatus === "approved" && !order.returnLabelUrl && !order.returnQrCodeUrl && shippoEnabled ? (
                           <Link
