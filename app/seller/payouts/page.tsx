@@ -23,6 +23,10 @@ function setupErrorMessage(error: string | undefined) {
     return "TailorGraph needs to finish enabling Stripe Connect before seller payout onboarding can open.";
   }
 
+  if (error === "onboarding_incomplete") {
+    return "Stripe returned you to TailorGraph, but payouts are not fully enabled yet. Continue payout setup to finish any remaining Stripe requirements.";
+  }
+
   return "Stripe could not start payout setup. Please try again in a moment.";
 }
 

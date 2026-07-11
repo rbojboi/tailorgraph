@@ -4163,13 +4163,25 @@ export async function finalizeStripeOnboardingAction() {
     redirect("/?authError=Stripe+Connect+is+not+ready");
   }
 
-  const stripe = getStripe();
-  const account = await stripe.accounts.retrieve(user.stripeAccountId);
-  const completed = Boolean(account.details_submitted && account.charges_enabled);
-  await markUserStripeOnboardingComplete(user.id, completed);
+  let completed = false;
+
+  try {
+    const stripe = getStripe();
+    const account = await stripe.accounts.retrieve(user.stripeAccountId);
+    completed = Boolean(account.details_submitted && account.charges_enabled && account.payouts_enabled);
+    await markUserStripeOnboardingComplete(user.id, completed);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Stripe could not verify seller payout setup. Please try again.";
+    redirect(`/seller/payouts?setupError=${encodeURIComponent(message)}`);
+  }
+
   revalidatePath("/");
   revalidatePath("/seller");
-  redirect(completed ? "/seller?saved=stripe-connect" : "/seller?authError=Stripe+onboarding+is+not+complete+yet");
+  revalidatePath("/seller/payouts");
+  redirect(completed ? "/seller?saved=stripe-connect" : "/seller/payouts?setupError=onboarding_incomplete");
 }
 
 export async function buyNowAction(formData: FormData) {
