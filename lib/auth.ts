@@ -5,6 +5,10 @@ import { findUserById } from "@/lib/store";
 
 const SESSION_COOKIE = "suit_session";
 const SESSION_SECRET = process.env.SESSION_SECRET || "suit-yourself-local-secret";
+const COOKIE_DOMAIN =
+  process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_APP_URL?.includes("tailorgraph.com")
+    ? ".tailorgraph.com"
+    : undefined;
 
 function sign(value: string) {
   return createHmac("sha256", SESSION_SECRET).update(value).digest("hex");
@@ -29,7 +33,8 @@ export async function createSession(userId: string) {
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
     path: "/",
     maxAge: 60 * 60 * 24 * 14
   });
@@ -37,6 +42,18 @@ export async function createSession(userId: string) {
 
 export async function clearSession() {
   const cookieStore = await cookies();
+  if (COOKIE_DOMAIN) {
+    cookieStore.set(SESSION_COOKIE, "", {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: true,
+      domain: COOKIE_DOMAIN,
+      path: "/",
+      maxAge: 0
+    });
+    return;
+  }
+
   cookieStore.delete(SESSION_COOKIE);
 }
 
