@@ -25,6 +25,19 @@ function getReturnPolicyLabel(policy: string) {
   }
 }
 
+function savedMessage(saved: string) {
+  switch (saved) {
+    case "listing-created":
+      return "Listing created. This item is now live in your seller inventory.";
+    case "draft-created":
+      return "Draft saved. You can keep editing it here or publish it when ready.";
+    case "listing":
+      return "Listing saved.";
+    default:
+      return `Saved ${saved}.`;
+  }
+}
+
 export default async function SellerListingPage({ params, searchParams }: PageProps) {
   const { listingId } = await params;
   const filters = await searchParams;
@@ -62,7 +75,9 @@ export default async function SellerListingPage({ params, searchParams }: PagePr
             </div>
           </div>
           {firstValue(filters.saved) ? (
-            <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">Saved {firstValue(filters.saved)}.</p>
+            <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+              {savedMessage(firstValue(filters.saved)!)}
+            </p>
           ) : null}
         </section>
 

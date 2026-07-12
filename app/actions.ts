@@ -2738,7 +2738,10 @@ export async function createListingAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/seller");
-  redirect(`/seller?saved=${listingStatus === "draft" ? "draft" : "listing"}`);
+  revalidatePath("/seller/listings");
+  revalidatePath(`/seller/listings/${createdListing.id}`);
+  revalidatePath(`/listings/${createdListing.id}`);
+  redirect(`/seller/listings/${createdListing.id}?saved=${listingStatus === "draft" ? "draft-created" : "listing-created"}`);
 }
 
 export async function saveSellerProfileAction(formData: FormData) {
@@ -3071,7 +3074,10 @@ export async function forceCreateListingAction(formData: FormData) {
 
   revalidatePath("/");
   revalidatePath("/seller");
-  redirect(`/seller?saved=${listingStatus === "draft" ? "draft" : "listing"}`);
+  revalidatePath("/seller/listings");
+  revalidatePath(`/seller/listings/${createdListing.id}`);
+  revalidatePath(`/listings/${createdListing.id}`);
+  redirect(`/seller/listings/${createdListing.id}?saved=${listingStatus === "draft" ? "draft-created" : "listing-created"}`);
 }
 
 export async function forceUpdateListingAction(formData: FormData) {

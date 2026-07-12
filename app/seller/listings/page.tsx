@@ -21,6 +21,19 @@ function isInventoryFilter(value: string | undefined): value is InventoryFilter 
     || value === "closed";
 }
 
+function savedMessage(saved: string) {
+  switch (saved) {
+    case "listing-created":
+      return "Listing created.";
+    case "draft-created":
+      return "Draft saved.";
+    case "listing":
+      return "Listing saved.";
+    default:
+      return `Saved ${saved}.`;
+  }
+}
+
 export default async function SellerListingsPage({
   searchParams
 }: {
@@ -36,6 +49,7 @@ export default async function SellerListingsPage({
 
   const requestedInventoryStatus = firstValue(params.inventoryStatus);
   const inventoryStatus: InventoryFilter = isInventoryFilter(requestedInventoryStatus) ? requestedInventoryStatus : "all";
+  const saved = firstValue(params.saved);
 
   return (
     <AppShell>
@@ -53,6 +67,11 @@ export default async function SellerListingsPage({
               Back to Seller Dashboard
             </Link>
           </div>
+          {saved ? (
+            <p className="mt-4 rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+              {savedMessage(saved)}
+            </p>
+          ) : null}
         </section>
 
         <SellerListingsManager userId={user.id} currentFilter={inventoryStatus} />
