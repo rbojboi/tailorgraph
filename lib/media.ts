@@ -20,6 +20,10 @@ function isBlobStorageConfigured() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
+function isProductionRuntime() {
+  return process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+}
+
 export async function saveListingMediaFiles(
   sellerId: string,
   files: File[]
@@ -36,8 +40,9 @@ export async function saveListingMediaFiles(
     }
   }
 
-  const targetDir = `public/uploads/listings/${sellerId}`;
-  await mkdir(targetDir, { recursive: true });
+  if (!isBlobStorageConfigured() && isProductionRuntime()) {
+    throw new Error("Listing media storage is not configured. Add BLOB_READ_WRITE_TOKEN in Vercel, then redeploy.");
+  }
 
   const media: ListingMedia[] = [];
 
@@ -62,6 +67,8 @@ export async function saveListingMediaFiles(
       });
       url = blob.url;
     } else {
+      const targetDir = `public/uploads/listings/${sellerId}`;
+      await mkdir(targetDir, { recursive: true });
       const outputPath = `${targetDir}/${filename}`;
       const buffer = Buffer.from(await file.arrayBuffer());
       await writeFile(outputPath, buffer);
