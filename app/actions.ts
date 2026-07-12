@@ -2630,17 +2630,19 @@ export async function createListingAction(formData: FormData) {
       }
     : null;
 
-  const garmentSanityCheck = runBuyerGarmentMeasurementSanityCheck(
-    buildSellerGarmentMeasurementInputs(category, jacketMeasurements, waistcoatMeasurements, trouserMeasurements)
-  );
-
-  if (garmentSanityCheck.status !== "ok") {
-    redirectWithSellerMeasurementWarnings(
-      "/seller/listings/new",
-      garmentSanityCheck,
-      serializeSellerListingDraft(formData),
-      JSON.stringify(media)
+  if (listingStatus === "active") {
+    const garmentSanityCheck = runBuyerGarmentMeasurementSanityCheck(
+      buildSellerGarmentMeasurementInputs(category, jacketMeasurements, waistcoatMeasurements, trouserMeasurements)
     );
+
+    if (garmentSanityCheck.status !== "ok") {
+      redirectWithSellerMeasurementWarnings(
+        "/seller/listings/new",
+        garmentSanityCheck,
+        serializeSellerListingDraft(formData),
+        JSON.stringify(media)
+      );
+    }
   }
 
   const primaryChest = jacketMeasurements?.chest ?? waistcoatMeasurements?.chest ?? 0;
@@ -2886,17 +2888,19 @@ export async function updateListingAction(formData: FormData) {
       }
     : null;
 
-  const garmentSanityCheck = runBuyerGarmentMeasurementSanityCheck(
-    buildSellerGarmentMeasurementInputs(category, jacketMeasurements, waistcoatMeasurements, trouserMeasurements)
-  );
-
-  if (garmentSanityCheck.status !== "ok") {
-    redirectWithSellerMeasurementWarnings(
-      `/seller/listings/${listingId}/edit`,
-      garmentSanityCheck,
-      serializeSellerListingDraft(formData),
-      JSON.stringify(media)
+  if (existingListing.status === "active") {
+    const garmentSanityCheck = runBuyerGarmentMeasurementSanityCheck(
+      buildSellerGarmentMeasurementInputs(category, jacketMeasurements, waistcoatMeasurements, trouserMeasurements)
     );
+
+    if (garmentSanityCheck.status !== "ok") {
+      redirectWithSellerMeasurementWarnings(
+        `/seller/listings/${listingId}/edit`,
+        garmentSanityCheck,
+        serializeSellerListingDraft(formData),
+        JSON.stringify(media)
+      );
+    }
   }
 
   const primaryChest = jacketMeasurements?.chest ?? waistcoatMeasurements?.chest ?? 0;

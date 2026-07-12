@@ -280,10 +280,19 @@ export function SellerListingForm({
   const usesSplitPrimarySize = isShirtSizeCategory(category) || isTrouserSizeCategory(category);
   const primarySplitSize = splitCombinedSize(listing?.sizeLabel);
   const suitTrouserSplitSize = splitCombinedSize(listing?.trouserSizeLabel);
+  const [listingIntent, setListingIntent] = useState(listing ? listing.status : "publish");
   const [sizeLabelPartOne, setSizeLabelPartOne] = useState(primarySplitSize.partOne);
   const [sizeLabelPartTwo, setSizeLabelPartTwo] = useState(primarySplitSize.partTwo);
   const [trouserSizeLabelPartOne, setTrouserSizeLabelPartOne] = useState(suitTrouserSplitSize.partOne);
   const [trouserSizeLabelPartTwo, setTrouserSizeLabelPartTwo] = useState(suitTrouserSplitSize.partTwo);
+
+  function setSubmitIntent(value: string, form: HTMLFormElement | null) {
+    setListingIntent(value);
+    const intentInput = form?.elements.namedItem("listingIntent");
+    if (intentInput instanceof HTMLInputElement) {
+      intentInput.value = value;
+    }
+  }
 
   function handlePriceChange(value: string) {
     const sanitized = value.replace(/[^0-9.]/g, "");
@@ -314,6 +323,7 @@ export function SellerListingForm({
   return (
     <form action={action} noValidate className="mt-5 grid gap-3 sm:grid-cols-2">
       {listing ? <input type="hidden" name="listingId" value={listing.id} /> : null}
+      <input type="hidden" name="listingIntent" value={listingIntent} readOnly />
       <ListingMediaInput required={!listing} existingMedia={listing?.media ?? []} />
       <Input
         name="title"
@@ -957,17 +967,17 @@ export function SellerListingForm({
 
       <div className="sm:col-span-2 flex flex-wrap gap-3">
         <button
-          name="listingIntent"
-          value={listing ? listing.status : "publish"}
+          type="submit"
+          onClick={(event) => setSubmitIntent(listing ? listing.status : "publish", event.currentTarget.form)}
           className="rounded-full bg-stone-950 px-4 py-3 text-sm font-semibold text-white"
         >
           {submitLabel}
         </button>
         {showDraftButton ? (
           <button
-            name="listingIntent"
-            value="save_draft"
+            type="submit"
             formNoValidate
+            onClick={(event) => setSubmitIntent("save_draft", event.currentTarget.form)}
             className="rounded-full border border-stone-300 bg-white px-4 py-3 text-sm font-semibold text-stone-900"
           >
             Save as Draft
