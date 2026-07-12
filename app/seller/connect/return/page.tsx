@@ -1,4 +1,3 @@
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
@@ -22,9 +21,6 @@ export default async function SellerConnectReturnPage() {
       const account = await getStripe().accounts.retrieve(user.stripeAccountId);
       const completed = Boolean(account.details_submitted && account.charges_enabled && account.payouts_enabled);
       await markUserStripeOnboardingComplete(user.id, completed);
-      revalidatePath("/");
-      revalidatePath("/seller");
-      revalidatePath("/seller/payouts");
       destination = completed ? "/seller?saved=stripe-connect" : "/seller/payouts?setupError=onboarding_incomplete";
     }
   } catch (error) {
