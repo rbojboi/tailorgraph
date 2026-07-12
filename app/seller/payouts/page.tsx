@@ -44,7 +44,6 @@ export default async function SellerPayoutsPage({
 
   const params = await searchParams;
   const setupError = firstValue(params.setupError);
-  const friendlyError = setupErrorMessage(setupError);
   const stripeEnabled = isStripeConfigured();
   const isAdmin = isAdminUser(user);
   let stripeAccount: Stripe.Account | null = null;
@@ -61,6 +60,7 @@ export default async function SellerPayoutsPage({
   const chargesEnabled = Boolean(stripeAccount?.charges_enabled);
   const payoutsEnabled = Boolean(stripeAccount?.payouts_enabled);
   const ready = detailsSubmitted && chargesEnabled && payoutsEnabled;
+  const friendlyError = ready ? null : setupErrorMessage(setupError);
   const currentlyDue = stripeAccount?.requirements?.currently_due ?? [];
 
   return (
