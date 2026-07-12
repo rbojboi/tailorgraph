@@ -565,6 +565,7 @@ export function SellerListingForm({
               <button
                 type="submit"
                 formAction={warningAction}
+                formNoValidate
                 className="rounded-full border border-stone-900 bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
               >
                 {warningButtonLabel ?? "Publish Anyway"}
