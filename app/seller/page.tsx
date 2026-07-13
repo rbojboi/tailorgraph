@@ -172,9 +172,20 @@ export default async function SellerPage({
               </h2>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
-              <Spec label="Active" value={String(activeCount)} />
-              <Spec label="Drafts" value={String(draftCount)} />
-              <Spec label="Archived" value={String(archivedCount)} />
+              {[
+                ["Active", activeCount, "/seller/listings?inventoryStatus=active"],
+                ["Drafts", draftCount, "/seller/listings?inventoryStatus=drafts"],
+                ["Archived", archivedCount, "/seller/listings?inventoryStatus=closed"]
+              ].map(([label, value, href]) => (
+                <Link
+                  key={label}
+                  href={String(href)}
+                  className="rounded-2xl bg-white px-3 py-3 transition hover:-translate-y-0.5 hover:ring-2 hover:ring-stone-300"
+                >
+                  <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{label}</p>
+                  <p className="mt-1 text-sm font-semibold text-stone-900">{value}</p>
+                </Link>
+              ))}
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Link
