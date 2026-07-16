@@ -28,6 +28,7 @@ export function BuyerPurchaseActionsMenu({
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
 
   useEffect(() => {
@@ -45,9 +46,15 @@ export function BuyerPurchaseActionsMenu({
     }
 
     function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false);
+      const target = event.target as Node;
+      const clickedButton = rootRef.current?.contains(target);
+      const clickedMenu = menuRef.current?.contains(target);
+
+      if (clickedButton || clickedMenu) {
+        return;
       }
+
+      setOpen(false);
     }
 
     function handleMenuOpen(event: Event) {
@@ -85,6 +92,7 @@ export function BuyerPurchaseActionsMenu({
   const menu = open && typeof document !== "undefined"
     ? createPortal(
         <div
+          ref={menuRef}
           className="fixed z-[300] flex w-52 flex-col gap-1 rounded-2xl border border-stone-200 bg-white p-2 shadow-[0_18px_50px_rgba(28,25,23,0.14)]"
           style={{ top: `${menuPosition.top}px`, left: `${menuPosition.left}px` }}
         >
