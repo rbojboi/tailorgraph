@@ -218,6 +218,7 @@ export default async function SellerPage({
               <div className="grid gap-3">
                 {sales.length ? (
                   sales.map((order) => {
+                    const buyerUsername = order.buyerUsername || order.buyerName;
                     const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
                     const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
                     const returnAlertTitle = hasReturnProviderLabel
@@ -239,7 +240,12 @@ export default async function SellerPage({
                         <p className="mt-1 text-sm text-stone-700">
                           Sold {formatCurrency(order.subtotal)}
                           {order.shippingAmount > 0 ? ` (+ ${formatCurrency(order.shippingAmount)} shipping)` : ""} to{" "}
-                          <span className="font-semibold text-stone-900">{order.buyerName}</span>
+                          <Link
+                            href={`/users/${buyerUsername}`}
+                            className="font-semibold text-stone-900 transition hover:text-[var(--accent)]"
+                          >
+                            @{buyerUsername}
+                          </Link>
                         </p>
                       </div>
                       {returnFlowActive ? (

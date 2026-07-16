@@ -112,7 +112,7 @@ export function Select({
   );
 }
 
-export function Spec({ label, value }: { label: string; value: string }) {
+export function Spec({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="rounded-2xl bg-white px-3 py-3">
       <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{label}</p>

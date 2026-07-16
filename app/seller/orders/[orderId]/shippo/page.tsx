@@ -62,6 +62,7 @@ export default async function SellerShippoRatesPage({
   }
 
   const saved = firstValue(query.saved);
+  const buyerUsername = order.buyerUsername || order.buyerName;
 
   return (
     <AppShell>
@@ -84,7 +85,14 @@ export default async function SellerShippoRatesPage({
 
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             <Spec label="Order" value={order.listingTitle} />
-            <Spec label="Buyer" value={order.buyerName} />
+            <Spec
+              label="Buyer"
+              value={
+                <Link href={`/users/${buyerUsername}`} className="transition hover:text-[var(--accent)]">
+                  @{buyerUsername}
+                </Link>
+              }
+            />
             <Spec label="Ship From" value={`${sellerAddress.city}, ${sellerAddress.state}`} />
           </div>
 

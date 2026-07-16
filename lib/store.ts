@@ -912,6 +912,7 @@ function mapOrder(row: Record<string, unknown>): Order {
     id: String(row.id),
     buyerId: String(row.buyer_id),
     buyerName: String(row.buyer_name),
+    buyerUsername: String(row.buyer_username ?? row.buyer_name),
     sellerId: String(row.seller_id),
     sellerName: String(row.seller_name),
     listingId: String(row.listing_id),
@@ -2571,6 +2572,7 @@ export async function findOrderById(orderId: string): Promise<Order | null> {
   const result = await requirePool().query(
     `SELECT
        orders.*,
+       buyer.username AS buyer_username,
        listings.returns_accepted,
        listings.status AS listing_status,
        order_reviews.overall_rating AS review_overall_rating,
@@ -2580,6 +2582,7 @@ export async function findOrderById(orderId: string): Promise<Order | null> {
        order_reviews.communication_rating AS review_communication_rating,
        order_reviews.feedback AS review_feedback
      FROM orders
+     LEFT JOIN users AS buyer ON buyer.id = orders.buyer_id
      LEFT JOIN listings ON listings.id = orders.listing_id
      LEFT JOIN order_reviews ON order_reviews.order_id = orders.id
      WHERE orders.id = $1`,
@@ -2933,7 +2936,14 @@ export async function listSellerOrders(userId: string): Promise<Order[]> {
   }
 
   await ensureSchema();
-  const result = await requirePool().query("SELECT * FROM orders WHERE seller_id = $1 ORDER BY created_at DESC", [userId]);
+  const result = await requirePool().query(
+    `SELECT orders.*, buyer.username AS buyer_username
+     FROM orders
+     LEFT JOIN users AS buyer ON buyer.id = orders.buyer_id
+     WHERE orders.seller_id = $1
+     ORDER BY orders.created_at DESC`,
+    [userId]
+  );
   return result.rows.map(mapOrder);
 }
 

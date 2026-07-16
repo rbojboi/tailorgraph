@@ -474,6 +474,7 @@ export type Order = {
   id: string;
   buyerId: string;
   buyerName: string;
+  buyerUsername?: string;
   sellerId: string;
   sellerName: string;
   listingId: string;

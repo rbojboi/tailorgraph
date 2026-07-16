@@ -87,6 +87,7 @@ export default async function SellerOrderFulfillmentPage({
   const shippoEnabled = isShippoConfigured();
   const saved = firstValue(query.saved);
   const authError = firstValue(query.authError);
+  const buyerUsername = order.buyerUsername || order.buyerName;
   const hasProviderLabel = Boolean(order.shippingLabelUrl || order.shippingQrCodeUrl);
   const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
   const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
@@ -164,7 +165,14 @@ export default async function SellerOrderFulfillmentPage({
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Spec label="Status" value={getSellerOrderStatusLabel(order)} />
-            <Spec label="Buyer" value={order.buyerName} />
+            <Spec
+              label="Buyer"
+              value={
+                <Link href={`/users/${buyerUsername}`} className="transition hover:text-[var(--accent)]">
+                  @{buyerUsername}
+                </Link>
+              }
+            />
             <Spec label="Order Total" value={formatCurrency(order.amount)} />
             <Spec label="Ordered" value={formatDateLabel(order.createdAt)} />
           </div>

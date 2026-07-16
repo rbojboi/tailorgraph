@@ -135,6 +135,7 @@ function renderListingEntry(entry: Extract<InventoryEntry, { kind: "listing" }>)
 function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
   const order = entry.order;
   const shippoEnabled = isShippoConfigured();
+  const buyerUsername = order.buyerUsername || order.buyerName;
 
   return (
     <article key={`${entry.bucket}-${order.id}`} className="rounded-[1.5rem] border border-stone-300 bg-white p-4">
@@ -142,7 +143,11 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
         <div>
           <h2 className="text-lg font-semibold text-stone-950">{order.listingTitle}</h2>
           <p className="mt-1 text-sm text-stone-700">
-            Buyer: {order.buyerName} · Ordered {formatDateLabel(order.createdAt)}
+            Buyer:{" "}
+            <Link href={`/users/${buyerUsername}`} className="font-semibold transition hover:text-[var(--accent)]">
+              @{buyerUsername}
+            </Link>{" "}
+            · Ordered {formatDateLabel(order.createdAt)}
           </p>
         </div>
         <span className="rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-800">
@@ -152,7 +157,14 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-4">
         <Spec label="Sale Price" value={`$${order.amount}`} />
-        <Spec label="Buyer" value={order.buyerName} />
+        <Spec
+          label="Buyer"
+          value={
+            <Link href={`/users/${buyerUsername}`} className="transition hover:text-[var(--accent)]">
+              @{buyerUsername}
+            </Link>
+          }
+        />
         <Spec label="Address" value={`${order.shippingAddress.city}, ${order.shippingAddress.state}`} />
         <Spec label="Tracking" value={order.trackingNumber || "Not added"} />
       </div>
