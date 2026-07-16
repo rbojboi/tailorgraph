@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { saveOrderReviewAction } from "@/app/actions";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
-import { OrderDisputeForm } from "@/components/order-dispute-form";
 import { RatingStarsInput } from "@/components/rating-stars-input";
 import { AppShell, PageWrap } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -243,9 +242,12 @@ export default async function RateOrderPage({
             </div>
           </article>
 
-          <div className="mt-5">
-            <OrderDisputeForm orderId={order.id} role="buyer" returnTo={`/buyer/orders/${order.id}/rate?saved=issue`} />
-          </div>
+          <Link
+            href={`/buyer/orders/${order.id}/dispute`}
+            className="mt-5 inline-flex rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+          >
+            Open Dispute Form
+          </Link>
 
           {reviewLocked ? (
             <div className="mt-5 grid gap-5">

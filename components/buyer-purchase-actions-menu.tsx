@@ -141,14 +141,13 @@ export function BuyerPurchaseActionsMenu({
             </form>
           ) : null}
           {canReportIssue ? (
-            <form action={openIssueAction}>
-              <input type="hidden" name="orderId" value={orderId} />
-              <input type="hidden" name="issueReason" value="Issue reported" />
-              <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
-                Report Issue
-              </button>
-            </form>
+            <Link
+              href={`/buyer/orders/${orderId}/dispute`}
+              onClick={() => setOpen(false)}
+              className="block rounded-xl px-3 py-2 text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950"
+            >
+              Open Dispute
+            </Link>
           ) : null}
         </div>,
         document.body

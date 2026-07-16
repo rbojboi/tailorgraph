@@ -4,7 +4,6 @@ import { emailBuyerReturnLabelAction, openIssueAction } from "@/app/actions";
 import { BuyerPurchaseActionsMenu } from "@/components/buyer-purchase-actions-menu";
 import { BuyerPurchaseFilterControl } from "@/components/buyer-purchase-filter-control";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
-import { OrderDisputeForm } from "@/components/order-dispute-form";
 import { OrderRatingStars } from "@/components/order-rating-stars";
 import { AppShell, PageWrap, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -449,15 +448,6 @@ export default async function BuyerOrdersPage({
                           </button>
                         </form>
                       ) : null}
-                    </div>
-                  ) : null}
-                  {canReportIssue(order) ? (
-                    <div className="mt-4">
-                      <OrderDisputeForm
-                        orderId={order.id}
-                        role="buyer"
-                        returnTo={`/buyer/orders?purchaseStatus=${selectedPurchaseStatus}&saved=issue`}
-                      />
                     </div>
                   ) : null}
                 </article>

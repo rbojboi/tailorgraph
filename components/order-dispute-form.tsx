@@ -27,12 +27,14 @@ export function OrderDisputeForm({
   orderId,
   returnTo,
   role,
-  compact = false
+  compact = false,
+  expanded = false
 }: {
   orderId: string;
   returnTo: string;
   role: "buyer" | "seller";
   compact?: boolean;
+  expanded?: boolean;
 }) {
   const options = role === "buyer" ? buyerProblemOptions : sellerProblemOptions;
   const title = role === "buyer" ? "Open a dispute for this order" : "Report a dispute for this order";
@@ -41,14 +43,12 @@ export function OrderDisputeForm({
       ? "Use this when something needs TailorGraph review beyond a normal return."
       : "Use this when fulfillment, a return, or buyer conduct needs TailorGraph review.";
 
-  return (
-    <details className="rounded-[1.25rem] border border-stone-300 bg-white p-4">
-      <summary className="cursor-pointer text-sm font-semibold text-stone-950">{title}</summary>
-      <form action={openIssueAction} className="mt-4 grid gap-4">
+  const form = (
+    <form action={openIssueAction} className={`${expanded ? "" : "mt-4"} grid gap-4`}>
         <input type="hidden" name="orderId" value={orderId} />
         <input type="hidden" name="issueReason" value={role === "buyer" ? "Dispute reported by buyer" : "Dispute reported by seller"} />
         <input type="hidden" name="returnTo" value={returnTo} />
-        <p className="text-sm leading-6 text-stone-700">{description}</p>
+        {expanded ? null : <p className="text-sm leading-6 text-stone-700">{description}</p>}
         <fieldset className="grid gap-2">
           <legend className="text-sm font-semibold text-stone-950">What went wrong?</legend>
           <div className={`grid gap-2 ${compact ? "" : "sm:grid-cols-2"}`}>
@@ -84,6 +84,24 @@ export function OrderDisputeForm({
           Submit Dispute
         </button>
       </form>
+  );
+
+  if (expanded) {
+    return (
+      <div className="grid gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-stone-950">{title}</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-700">{description}</p>
+        </div>
+        {form}
+      </div>
+    );
+  }
+
+  return (
+    <details className="rounded-[1.25rem] border border-stone-300 bg-white p-4">
+      <summary className="cursor-pointer text-sm font-semibold text-stone-950">{title}</summary>
+      {form}
     </details>
   );
 }

@@ -6,7 +6,6 @@ import {
   emailSellerShipmentLabelAction,
   shipOrderAction
 } from "@/app/actions";
-import { OrderDisputeForm } from "@/components/order-dispute-form";
 import { AppShell, Input, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency, formatDisplayValue } from "@/lib/display";
@@ -382,9 +381,12 @@ export default async function SellerOrderFulfillmentPage({
                           <Spec label="Return ETA" value={formatDateLabel(order.returnEta)} />
                         </div>
                         {order.returnStatus === "received" ? (
-                          <div className="mt-4">
-                            <OrderDisputeForm orderId={order.id} role="seller" returnTo={`/seller/orders/${order.id}`} />
-                          </div>
+                          <Link
+                            href={`/seller/orders/${order.id}/dispute`}
+                            className="mt-4 inline-flex rounded-full border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-950 transition hover:border-amber-900"
+                          >
+                            Report Return Issue
+                          </Link>
                         ) : null}
                       </>
                     ) : null}
@@ -499,9 +501,12 @@ export default async function SellerOrderFulfillmentPage({
                 title="Need TailorGraph review?"
                 description="Use this for order problems that are not an ordinary shipment update or standard return step."
               />
-              <div className="mt-5">
-                <OrderDisputeForm orderId={order.id} role="seller" returnTo={`/seller/orders/${order.id}?saved=issue`} compact />
-              </div>
+              <Link
+                href={`/seller/orders/${order.id}/dispute`}
+                className="mt-5 inline-flex rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900 transition hover:border-stone-950"
+              >
+                Open Dispute Form
+              </Link>
             </article>
           </div>
         </section>
