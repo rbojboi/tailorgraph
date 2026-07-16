@@ -7,8 +7,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
 import { formatDisplayValue } from "@/lib/display";
 import { EMAIL_SENDER_TEST_CATEGORIES } from "@/lib/notifications";
-import { countAdminUsers, ensureSeedData, listAllOrders, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
-import type { Listing, Order, SupportRequest, User } from "@/lib/types";
+import { countAdminUsers, ensureSeedData, listAllOrders, listDisputes, listMarketplace, listSupportRequests, listUsers } from "@/lib/store";
+import type { Dispute, Listing, Order, SupportRequest, User } from "@/lib/types";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -38,10 +38,12 @@ export default async function AdminPage({
   const users = await listUsers();
   const orders = await listAllOrders();
   const listings = await listMarketplace();
-  const supportRequests = await listSupportRequests(12);
+  const supportRequests = (await listSupportRequests(24)).filter((request) => request.kind === "support").slice(0, 12);
+  const disputes = await listDisputes(12);
   const activeListings = listings.filter((listing: Listing) => listing.status === "active").length;
   const soldListings = listings.filter((listing: Listing) => listing.status === "sold").length;
   const paidOrders = orders.filter((order: Order) => order.status === "paid").length;
+  const openDisputes = disputes.filter((dispute) => !["resolved", "closed"].includes(dispute.status)).length;
   const senderTestRunToken = randomUUID();
 
   return (
@@ -56,11 +58,12 @@ export default async function AdminPage({
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-4">
+        <section className="grid gap-6 lg:grid-cols-5">
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Users" value={String(users.length)} /></article>
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Listings" value={String(listings.length)} /></article>
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Active listings" value={String(activeListings)} /></article>
           <article className="panel rounded-[1.75rem] p-6"><Spec label="Paid orders" value={String(paidOrders)} /></article>
+          <article className="panel rounded-[1.75rem] p-6"><Spec label="Open disputes" value={String(openDisputes)} /></article>
         </section>
 
         <section className="panel rounded-[1.75rem] p-6">
@@ -174,9 +177,54 @@ export default async function AdminPage({
 
         <section className="panel rounded-[1.75rem] p-6">
           <SectionTitle
+            eyebrow="Disputes"
+            title="Dispute review queue"
+            description="Structured cases that may need evidence review, refund decisions, trust-and-safety action, or buyer/seller follow-up."
+          />
+          <div className="mt-5 grid gap-4">
+            {disputes.length ? (
+              disputes.map((dispute: Dispute) => (
+                <article key={dispute.id} className="rounded-[1.5rem] border border-stone-300 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-stone-950">{dispute.subject}</h2>
+                      <p className="mt-1 text-sm text-stone-700">
+                        {dispute.openedByName} · {dispute.openedByEmail}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-stone-100 px-3 py-1 text-sm text-stone-800">
+                        {formatDisplayValue(dispute.status)}
+                      </span>
+                      {dispute.priority === "urgent" ? (
+                        <span className="rounded-full bg-rose-100 px-3 py-1 text-sm font-semibold text-rose-900">
+                          Urgent
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                    <Spec label="Reason" value={formatDisplayValue(dispute.reason)} />
+                    <Spec label="Order ID" value={dispute.orderId || "None"} />
+                    <Spec label="Listing" value={dispute.listingTitle || dispute.listingId || "None"} />
+                    <Spec label="Against" value={dispute.againstUsername ? `@${dispute.againstUsername}` : "None"} />
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-stone-700">{dispute.description}</p>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-[1.5rem] border border-dashed border-stone-300 px-4 py-8 text-center text-sm text-stone-600">
+                No disputes yet.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="panel rounded-[1.75rem] p-6">
+          <SectionTitle
             eyebrow="Support"
-            title="Recent support and dispute requests"
-            description="A quick operational view into what customers are asking for help with right now."
+            title="Recent support requests"
+            description="General support intake that does not necessarily require a formal dispute review."
           />
           <div className="mt-5 grid gap-4">
             {supportRequests.length ? (

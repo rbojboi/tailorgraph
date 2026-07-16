@@ -18,7 +18,7 @@ const helpTopics = [
   },
   {
     title: "Shipping and returns",
-    answer: "Tracking and delivery updates live in My Purchases. If a return was accepted but the item came back damaged, incomplete, or not as expected, use the dispute form so we can log the case properly."
+    answer: "Tracking, delivery, and ordinary returns live in My Purchases. Use disputes only when something goes wrong, such as damage, missing pieces, shipping problems, or suspected bad behavior."
   },
   {
     title: "Fit and measurements",
@@ -57,7 +57,7 @@ export default async function SupportPage({
           <p className="eyebrow text-xs text-stone-500">Support</p>
           <h1 className="mt-3 text-4xl font-semibold text-stone-950">Customer support and disputes</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-stone-700">
-            Start with the common help topics below. If you still need help, send us a support request. If something involves a return, damaged item, shipping problem, or suspected bad behavior, use the dispute section so it is logged correctly.
+            Start with the common help topics below. If you still need help, send us a support request. Ordinary returns stay in your order flow; disputes are for damaged items, shipping problems, safety concerns, or situations that need TailorGraph review.
           </p>
         </section>
 

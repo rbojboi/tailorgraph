@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import type {
   BuyerProfile,
+  Dispute,
+  DisputePriority,
+  DisputeStatus,
   JacketMeasurements,
   JacketSpecs,
   Listing,
@@ -499,12 +502,41 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS disputes (
+      id TEXT PRIMARY KEY,
+      support_request_id TEXT REFERENCES support_requests(id) ON DELETE SET NULL,
+      opened_by_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      opened_by_name TEXT NOT NULL,
+      opened_by_email TEXT NOT NULL,
+      opened_by_role TEXT NOT NULL,
+      against_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      order_id TEXT REFERENCES orders(id) ON DELETE SET NULL,
+      listing_id TEXT REFERENCES listings(id) ON DELETE SET NULL,
+      reason TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'open',
+      priority TEXT NOT NULL DEFAULT 'standard',
+      admin_notes TEXT NOT NULL DEFAULT '',
+      resolution TEXT NOT NULL DEFAULT '',
+      closed_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS message_threads_listing_unique
       ON message_threads (buyer_id, seller_id, listing_id)
       WHERE listing_id IS NOT NULL AND order_id IS NULL;
 
     CREATE UNIQUE INDEX IF NOT EXISTS message_threads_order_unique
       ON message_threads (order_id)
+      WHERE order_id IS NOT NULL;
+
+    CREATE INDEX IF NOT EXISTS disputes_status_created_idx
+      ON disputes (status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS disputes_order_idx
+      ON disputes (order_id)
       WHERE order_id IS NOT NULL;
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS seller_zip_code TEXT NOT NULL DEFAULT '';
@@ -1117,6 +1149,32 @@ function mapSupportRequest(row: Record<string, unknown>): SupportRequest {
     status: String(row.status ?? "open") as SupportRequestStatus,
     createdAt: new Date(String(row.created_at)).toISOString(),
     resolvedAt: row.resolved_at ? new Date(String(row.resolved_at)).toISOString() : null
+  };
+}
+
+function mapDispute(row: Record<string, unknown>): Dispute {
+  return {
+    id: String(row.id),
+    supportRequestId: row.support_request_id ? String(row.support_request_id) : null,
+    openedById: row.opened_by_id ? String(row.opened_by_id) : null,
+    openedByName: String(row.opened_by_name ?? ""),
+    openedByEmail: String(row.opened_by_email ?? ""),
+    openedByRole: String(row.opened_by_role ?? "guest") as Dispute["openedByRole"],
+    againstUserId: row.against_user_id ? String(row.against_user_id) : null,
+    againstUsername: row.against_username ? String(row.against_username) : null,
+    orderId: row.order_id ? String(row.order_id) : null,
+    listingId: row.listing_id ? String(row.listing_id) : null,
+    listingTitle: row.listing_title ? String(row.listing_title) : null,
+    reason: String(row.reason) as SupportRequestTopic,
+    subject: String(row.subject ?? ""),
+    description: String(row.description ?? ""),
+    status: String(row.status ?? "open") as DisputeStatus,
+    priority: String(row.priority ?? "standard") as DisputePriority,
+    adminNotes: String(row.admin_notes ?? ""),
+    resolution: String(row.resolution ?? ""),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+    closedAt: row.closed_at ? new Date(String(row.closed_at)).toISOString() : null
   };
 }
 
@@ -3721,6 +3779,48 @@ export async function createSupportRequest(input: {
   return mapSupportRequest(result.rows[0]);
 }
 
+export async function createDispute(input: {
+  supportRequestId?: string | null;
+  openedById: string | null;
+  openedByName: string;
+  openedByEmail: string;
+  openedByRole: Dispute["openedByRole"];
+  againstUserId?: string | null;
+  orderId?: string | null;
+  listingId?: string | null;
+  reason: SupportRequestTopic;
+  subject: string;
+  description: string;
+  priority?: DisputePriority;
+}): Promise<Dispute> {
+  await ensureSchema();
+  const id = randomUUID();
+  const result = await requirePool().query(
+    `INSERT INTO disputes (
+       id, support_request_id, opened_by_id, opened_by_name, opened_by_email, opened_by_role,
+       against_user_id, order_id, listing_id, reason, subject, description, status, priority, created_at, updated_at
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'open', $13, NOW(), NOW())
+     RETURNING *`,
+    [
+      id,
+      input.supportRequestId ?? null,
+      input.openedById,
+      input.openedByName,
+      input.openedByEmail.toLowerCase(),
+      input.openedByRole,
+      input.againstUserId ?? null,
+      input.orderId ?? null,
+      input.listingId ?? null,
+      input.reason,
+      input.subject,
+      input.description,
+      input.priority ?? "standard"
+    ]
+  );
+
+  return mapDispute(result.rows[0]);
+}
+
 export async function listSupportRequests(limit = 50): Promise<SupportRequest[]> {
   if (!databaseConfigured) {
     return [];
@@ -3736,6 +3836,27 @@ export async function listSupportRequests(limit = 50): Promise<SupportRequest[]>
   );
 
   return result.rows.map(mapSupportRequest);
+}
+
+export async function listDisputes(limit = 50): Promise<Dispute[]> {
+  if (!databaseConfigured) {
+    return [];
+  }
+
+  await ensureSchema();
+  const result = await requirePool().query(
+    `SELECT disputes.*, listings.title AS listing_title, against_user.username AS against_username
+     FROM disputes
+     LEFT JOIN listings ON listings.id = disputes.listing_id
+     LEFT JOIN users AS against_user ON against_user.id = disputes.against_user_id
+     ORDER BY
+       CASE WHEN disputes.status IN ('resolved', 'closed') THEN 1 ELSE 0 END,
+       disputes.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+
+  return result.rows.map(mapDispute);
 }
 
 export function isDatabaseConfigured() {

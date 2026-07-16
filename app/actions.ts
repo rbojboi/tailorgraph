@@ -15,6 +15,7 @@ import {
 import { getAppUrl, getStripe, isStripeConfigured } from "@/lib/stripe";
 import {
   attachStripeSessionToOrder,
+  createDispute,
   createListing,
   createOffer,
   createOrder,
@@ -4063,6 +4064,20 @@ export async function openIssueAction(formData: FormData) {
     orderId,
     listingId: order.listingId
   });
+  await createDispute({
+    supportRequestId: supportRequest.id,
+    openedById: user.id,
+    openedByName: user.name,
+    openedByEmail: user.email,
+    openedByRole: user.role,
+    againstUserId: order.buyerId === user.id ? order.sellerId : order.buyerId,
+    orderId,
+    listingId: order.listingId,
+    reason: "order_dispute",
+    subject: reason || `Issue reported for order ${orderId}`,
+    description: reason || `Issue reported for order ${orderId}.`,
+    priority: isReturnRequest ? "standard" : "urgent"
+  });
   await sendSupportRequestNotifications({
     request: supportRequest
   });
@@ -4693,10 +4708,6 @@ export async function submitSupportRequestAction(formData: FormData) {
     if (!linkedOrder || (user && linkedOrder.buyerId !== user.id && linkedOrder.sellerId !== user.id)) {
       redirect("/support?authError=We+could+not+verify+that+order+for+your+account");
     }
-
-    await updateOrderIssue(orderId, "issue_open", subject, linkedOrder.sellerNotes);
-    revalidatePath("/buyer");
-    revalidatePath("/seller");
   }
 
   const request = await createSupportRequest({
@@ -4712,12 +4723,32 @@ export async function submitSupportRequestAction(formData: FormData) {
     listingId
   });
 
+  if (kind === "dispute") {
+    const linkedOrder = orderId ? await findOrderById(orderId) : null;
+    await createDispute({
+      supportRequestId: request.id,
+      openedById: user?.id ?? null,
+      openedByName: requesterName,
+      openedByEmail: requesterEmail,
+      openedByRole: requesterRole,
+      againstUserId: linkedOrder && user ? (linkedOrder.buyerId === user.id ? linkedOrder.sellerId : linkedOrder.buyerId) : null,
+      orderId,
+      listingId: listingId || linkedOrder?.listingId || null,
+      reason: topic,
+      subject,
+      description: message,
+      priority: topic === "scam_report" || topic === "trust_safety" ? "urgent" : "standard"
+    });
+  }
+
   await sendSupportRequestNotifications({
     request
   });
 
   revalidatePath("/support");
   revalidatePath("/admin");
+  revalidatePath("/buyer");
+  revalidatePath("/seller");
   redirect(`/support?saved=${kind === "dispute" ? "dispute-received" : "support-received"}`);
 }
 

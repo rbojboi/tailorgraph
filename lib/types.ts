@@ -240,6 +240,16 @@ export type SupportRequestTopic =
 
 export type SupportRequestStatus = "open" | "reviewing" | "resolved";
 
+export type DisputeStatus =
+  | "open"
+  | "needs_buyer_response"
+  | "needs_seller_response"
+  | "under_review"
+  | "resolved"
+  | "closed";
+
+export type DisputePriority = "standard" | "urgent";
+
 export type Listing = {
   id: string;
   sellerId: string;
@@ -614,4 +624,28 @@ export type SupportRequest = {
   status: SupportRequestStatus;
   createdAt: string;
   resolvedAt: string | null;
+};
+
+export type Dispute = {
+  id: string;
+  supportRequestId: string | null;
+  openedById: string | null;
+  openedByName: string;
+  openedByEmail: string;
+  openedByRole: Role | "guest";
+  againstUserId: string | null;
+  againstUsername: string | null;
+  orderId: string | null;
+  listingId: string | null;
+  listingTitle: string | null;
+  reason: SupportRequestTopic;
+  subject: string;
+  description: string;
+  status: DisputeStatus;
+  priority: DisputePriority;
+  adminNotes: string;
+  resolution: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
 };
