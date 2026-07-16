@@ -125,12 +125,7 @@ export default async function SellerPayoutsPage({
               <p className="text-sm font-semibold text-stone-950">What happens on Stripe</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">
                 Stripe may start by saying <span className="font-semibold text-stone-950">Sign in</span>, even if this is
-                your first time setting up seller payouts. Use the same email as this TailorGraph account:
-                <span className="font-semibold text-stone-950"> {user.email}</span>.
-              </p>
-              <p className="mt-2 text-sm leading-6 text-stone-700">
-                If Stripe shows a different email, sign out of Stripe or open this setup in a private browser window,
-                then come back here and restart payout setup.
+                your first time setting up seller payouts.
               </p>
             </div>
           ) : null}
