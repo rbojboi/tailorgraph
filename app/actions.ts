@@ -4165,6 +4165,31 @@ export async function createStripeConnectOnboardingAction() {
   redirect(accountLinkUrl);
 }
 
+export async function openStripeConnectedDashboardAction() {
+  redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+enable+seller+payouts");
+  const user = await getCurrentUser();
+
+  if (!user || (user.role !== "seller" && user.role !== "both")) {
+    redirect("/?authError=Seller+account+required+for+Stripe+Connect");
+  }
+
+  if (!user.stripeAccountId || !isStripeConfigured()) {
+    redirect("/seller/payouts?setupError=Stripe+Connect+is+not+ready");
+  }
+
+  let dashboardUrl: string;
+
+  try {
+    const loginLink = await getStripe().accounts.createLoginLink(user.stripeAccountId);
+    dashboardUrl = loginLink.url;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stripe could not open the seller dashboard.";
+    redirect(`/seller/payouts?setupError=${encodeURIComponent(message)}`);
+  }
+
+  redirect(dashboardUrl);
+}
+
 export async function finalizeStripeOnboardingAction() {
   redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+enable+seller+payouts");
   const user = await getCurrentUser();

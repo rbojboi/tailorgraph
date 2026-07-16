@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
-import { createStripeConnectOnboardingAction } from "@/app/actions";
+import { createStripeConnectOnboardingAction, openStripeConnectedDashboardAction } from "@/app/actions";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
@@ -72,6 +72,9 @@ export default async function SellerPayoutsPage({
   const ready = detailsSubmitted && chargesEnabled && payoutsEnabled;
   const friendlyError = ready ? null : setupErrorMessage(setupError);
   const currentlyDue = stripeAccount?.requirements?.currently_due ?? [];
+  const needsStripeInfo = !detailsSubmitted || currentlyDue.length > 0;
+  const inStripeReview = detailsSubmitted && !ready && currentlyDue.length === 0;
+  const canOpenStripeDashboard = Boolean(user.stripeAccountId && detailsSubmitted);
   const balanceSummary = stripeBalance ? summarizeStripeBalance(stripeBalance) : null;
 
   return (
@@ -145,7 +148,23 @@ export default async function SellerPayoutsPage({
             </div>
           ) : null}
 
-          {!ready ? (
+          {ready ? (
+            <div className="mt-6 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
+              <p className="text-sm font-semibold text-emerald-950">Payouts are connected</p>
+              <p className="mt-2 text-sm leading-6 text-emerald-900">
+                Stripe says this seller account can accept payments and receive payouts. Use the Stripe dashboard to view
+                payout timing, bank details, and account activity.
+              </p>
+            </div>
+          ) : inStripeReview ? (
+            <div className="mt-6 rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
+              <p className="text-sm font-semibold text-amber-950">Stripe is reviewing this account</p>
+              <p className="mt-2 text-sm leading-6 text-amber-900">
+                The seller details have been submitted. Stripe may take a little time to finish enabling payments and
+                payouts, and this page will update when Stripe returns the final status.
+              </p>
+            </div>
+          ) : !ready ? (
             <div className="mt-6 rounded-[1.5rem] border border-stone-300 bg-white p-5">
               <p className="text-sm font-semibold text-stone-950">What happens on Stripe</p>
               <p className="mt-2 text-sm leading-6 text-stone-700">
@@ -156,7 +175,13 @@ export default async function SellerPayoutsPage({
           ) : null}
 
           <div className="mt-6 flex flex-wrap gap-3">
-            {stripeEnabled ? (
+            {stripeEnabled && canOpenStripeDashboard ? (
+              <form action={openStripeConnectedDashboardAction}>
+                <button className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white">
+                  Open Stripe Dashboard
+                </button>
+              </form>
+            ) : stripeEnabled ? (
               <form action={createStripeConnectOnboardingAction}>
                 <button className="rounded-full bg-[var(--accent)] px-5 py-3 text-sm font-semibold text-white">
                   {user.stripeAccountId ? "Continue on Stripe" : "Continue to Stripe"}
@@ -171,6 +196,13 @@ export default async function SellerPayoutsPage({
               <span className="rounded-full bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-950">
                 Payouts ready
               </span>
+            ) : null}
+            {stripeEnabled && canOpenStripeDashboard && needsStripeInfo ? (
+              <form action={createStripeConnectOnboardingAction}>
+                <button className="rounded-full border border-stone-300 bg-white px-5 py-3 text-sm font-semibold text-stone-900">
+                  Finish Stripe Requirements
+                </button>
+              </form>
             ) : null}
           </div>
         </section>
