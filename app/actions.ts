@@ -12,6 +12,7 @@ import {
   hashPassword,
   verifyPassword
 } from "@/lib/auth";
+import { formatDisplayValue } from "@/lib/display";
 import { getAppUrl, getStripe, isStripeConfigured } from "@/lib/stripe";
 import {
   attachStripeSessionToOrder,
@@ -139,6 +140,10 @@ function stringValue(formData: FormData, key: string) {
   return String(formData.get(key) || "").trim();
 }
 
+function stringValues(formData: FormData, key: string) {
+  return formData.getAll(key).map((value) => String(value).trim()).filter(Boolean);
+}
+
 function normalizeReturnPolicyInput(value: string): ReturnPolicy {
   if (value === "automatic_returns" || value === "seller_approval" || value === "no_returns") {
     return value;
@@ -160,6 +165,27 @@ const supportRequestTopics: SupportRequestTopic[] = [
   "scam_report",
   "other"
 ];
+
+const issueCategoryLabels: Record<string, string> = {
+  item_not_as_described: "Item was not as described",
+  damaged_or_missing: "Item arrived damaged or missing pieces",
+  shipping_problem: "Shipping or tracking problem",
+  return_refund_problem: "Return or refund problem",
+  seller_communication: "Seller communication issue",
+  trust_safety: "Trust and safety concern",
+  returned_damaged: "Returned item came back damaged",
+  returned_missing_pieces: "Returned item is missing pieces",
+  wrong_item_returned: "Wrong item was returned",
+  buyer_communication: "Buyer communication issue"
+};
+
+const desiredOutcomeLabels: Record<string, string> = {
+  refund_review: "Refund review",
+  return_review: "Return review",
+  shipping_review: "Shipping review",
+  account_review: "Account or safety review",
+  other: "Other"
+};
 
 function numberValue(formData: FormData, key: string) {
   return Number(formData.get(key) || 0);
@@ -4036,6 +4062,9 @@ export async function openIssueAction(formData: FormData) {
 
   const orderId = stringValue(formData, "orderId");
   const reason = stringValue(formData, "issueReason");
+  const issueCategories = stringValues(formData, "issueCategory");
+  const issueDetails = stringValue(formData, "issueDetails");
+  const desiredOutcome = stringValue(formData, "desiredOutcome");
   const returnTo = stringValue(formData, "returnTo");
   const order = await findOrderById(orderId);
 
@@ -4043,24 +4072,53 @@ export async function openIssueAction(formData: FormData) {
     redirect("/?authError=Order+not+found");
   }
 
-  const isReturnRequest = reason.toLowerCase().includes("return");
+  const categoryLabels = issueCategories.map((category) => issueCategoryLabels[category] || formatDisplayValue(category));
+  const desiredOutcomeLabel = desiredOutcomeLabels[desiredOutcome] || "";
+  const issueSummary = categoryLabels.length ? categoryLabels.join(", ") : reason || "Issue reported";
+  const issueMessage = [
+    categoryLabels.length ? `Problem categories: ${categoryLabels.join(", ")}` : null,
+    issueDetails ? `Details: ${issueDetails}` : null,
+    desiredOutcomeLabel ? `Preferred outcome: ${desiredOutcomeLabel}` : null
+  ].filter(Boolean).join("\n\n") || reason || `Issue reported for order ${orderId}.`;
+  const isReturnRequest =
+    reason.toLowerCase().includes("return") ||
+    issueCategories.some((category) => category.includes("return") || category.startsWith("returned_"));
+  const isPlainReturnRequest = reason === "Return requested by buyer" && issueCategories.length === 0 && !issueDetails;
   if (isReturnRequest && !order.returnsAccepted) {
     redirect(`${returnTo || "/buyer/orders"}${(returnTo || "/buyer/orders").includes("?") ? "&" : "?"}authError=This+order+does+not+accept+returns.+You+can+report+an+issue+instead.`);
   }
 
-  await updateOrderIssue(orderId, "issue_open", reason || "Issue reported", null);
+  await updateOrderIssue(orderId, "issue_open", issueSummary, null);
   if (isReturnRequest && order.returnPolicy === "automatic_returns") {
     await updateOrderReturnStatus(orderId, "approved", null);
   }
+
+  if (isPlainReturnRequest) {
+    revalidatePath("/buyer");
+    revalidatePath("/buyer/orders");
+    revalidatePath("/seller");
+    revalidatePath(`/seller/orders/${orderId}`);
+    if (order.returnPolicy === "automatic_returns") {
+      redirect(withUpdatedQueryParam(returnTo || "/buyer/orders", "saved", "return-approved"));
+    }
+    redirect(returnTo || "/buyer/orders");
+  }
+
   const supportRequest = await createSupportRequest({
     userId: user.id,
     requesterName: user.name,
     requesterEmail: user.email,
     requesterRole: user.role,
     kind: "dispute",
-    topic: "order_dispute",
-    subject: reason || `Issue reported for order ${orderId}`,
-    message: reason || `Issue reported for order ${orderId}.`,
+    topic: issueCategories.includes("trust_safety")
+      ? "trust_safety"
+      : issueCategories.includes("shipping_problem")
+        ? "shipping_problem"
+        : isReturnRequest
+          ? "damaged_return"
+          : "order_dispute",
+    subject: issueSummary || `Issue reported for order ${orderId}`,
+    message: issueMessage,
     orderId,
     listingId: order.listingId
   });
@@ -4073,10 +4131,10 @@ export async function openIssueAction(formData: FormData) {
     againstUserId: order.buyerId === user.id ? order.sellerId : order.buyerId,
     orderId,
     listingId: order.listingId,
-    reason: "order_dispute",
-    subject: reason || `Issue reported for order ${orderId}`,
-    description: reason || `Issue reported for order ${orderId}.`,
-    priority: isReturnRequest ? "standard" : "urgent"
+    reason: supportRequest.topic,
+    subject: issueSummary || `Issue reported for order ${orderId}`,
+    description: issueMessage,
+    priority: issueCategories.includes("trust_safety") ? "urgent" : isReturnRequest ? "standard" : "urgent"
   });
   await sendSupportRequestNotifications({
     request: supportRequest

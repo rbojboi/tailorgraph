@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { saveOrderReviewAction } from "@/app/actions";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
+import { OrderDisputeForm } from "@/components/order-dispute-form";
 import { RatingStarsInput } from "@/components/rating-stars-input";
 import { AppShell, PageWrap } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
@@ -241,6 +242,10 @@ export default async function RateOrderPage({
               </div>
             </div>
           </article>
+
+          <div className="mt-5">
+            <OrderDisputeForm orderId={order.id} role="buyer" returnTo={`/buyer/orders/${order.id}/rate?saved=issue`} />
+          </div>
 
           {reviewLocked ? (
             <div className="mt-5 grid gap-5">
