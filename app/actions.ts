@@ -1239,7 +1239,7 @@ export async function signUpAction(formData: FormData) {
   });
 
   await createSession(user.id);
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect("/?saved=account-created");
 }
 
@@ -1257,13 +1257,13 @@ export async function loginAction(formData: FormData) {
   }
 
   await createSession(user.id);
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect("/");
 }
 
 export async function logoutAction() {
   await clearSession();
-  revalidatePath("/");
+  revalidatePath("/", "layout");
   redirect("/");
 }
 
