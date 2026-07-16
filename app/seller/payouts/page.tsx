@@ -5,7 +5,8 @@ import { createStripeConnectOnboardingAction } from "@/app/actions";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
-import { getStripe, isStripeConfigured } from "@/lib/stripe";
+import { formatCurrency } from "@/lib/display";
+import { getStripe, isStripeConfigured, retrieveConnectedAccountBalance, summarizeStripeBalance } from "@/lib/stripe";
 import { ensureSeedData } from "@/lib/store";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -47,12 +48,21 @@ export default async function SellerPayoutsPage({
   const stripeEnabled = isStripeConfigured();
   const isAdmin = isAdminUser(user);
   let stripeAccount: Stripe.Account | null = null;
+  let stripeBalance: Stripe.Balance | null = null;
 
   if (stripeEnabled && user.stripeAccountId) {
+    const stripe = getStripe();
+
     try {
-      stripeAccount = await getStripe().accounts.retrieve(user.stripeAccountId);
+      stripeAccount = await stripe.accounts.retrieve(user.stripeAccountId);
     } catch {
       stripeAccount = null;
+    }
+
+    try {
+      stripeBalance = await retrieveConnectedAccountBalance(user.stripeAccountId);
+    } catch {
+      stripeBalance = null;
     }
   }
 
@@ -62,6 +72,7 @@ export default async function SellerPayoutsPage({
   const ready = detailsSubmitted && chargesEnabled && payoutsEnabled;
   const friendlyError = ready ? null : setupErrorMessage(setupError);
   const currentlyDue = stripeAccount?.requirements?.currently_due ?? [];
+  const balanceSummary = stripeBalance ? summarizeStripeBalance(stripeBalance) : null;
 
   return (
     <AppShell>
@@ -107,11 +118,25 @@ export default async function SellerPayoutsPage({
           ) : null}
 
           <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Spec
+              label="Available balance"
+              value={balanceSummary ? formatCurrency(balanceSummary.availableCents / 100) : "Unavailable"}
+            />
+            <Spec
+              label="Pending balance"
+              value={balanceSummary ? formatCurrency(balanceSummary.pendingCents / 100) : "Unavailable"}
+            />
             <Spec label="Stripe configured" value={stripeEnabled ? "Yes" : "No"} />
             <Spec label="Connected account" value={user.stripeAccountId || "Not connected"} />
             <Spec label="Charges enabled" value={chargesEnabled ? "Yes" : "No"} />
             <Spec label="Payouts enabled" value={payoutsEnabled ? "Yes" : "No"} />
           </div>
+
+          {balanceSummary?.hasOtherCurrencies ? (
+            <p className="mt-3 rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
+              This view shows USD balances only. Stripe returned at least one non-USD balance for this connected account.
+            </p>
+          ) : null}
 
           {currentlyDue.length ? (
             <div className="mt-5 rounded-2xl bg-white p-4">

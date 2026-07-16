@@ -8,7 +8,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency, formatDisplayValue } from "@/lib/display";
 import { getSellerOrderStatusLabel } from "@/lib/order-status";
 import { isShippoConfigured } from "@/lib/shippo";
-import { getStripe, isStripeConfigured } from "@/lib/stripe";
+import { getStripe, isStripeConfigured, retrieveConnectedAccountBalance, summarizeStripeBalance } from "@/lib/stripe";
 import { ensureSeedData, listSellerInventory, listSellerOffers, listSellerOrders } from "@/lib/store";
 import type { OfferStatus } from "@/lib/types";
 
@@ -104,12 +104,21 @@ export default async function SellerPage({
   const stripeEnabled = isStripeConfigured();
   const shippoEnabled = isShippoConfigured();
   let stripeAccount: Stripe.Account | null = null;
+  let stripeBalance: Stripe.Balance | null = null;
 
   if (stripeEnabled && user.stripeAccountId) {
+    const stripe = getStripe();
+
     try {
-      stripeAccount = await getStripe().accounts.retrieve(user.stripeAccountId);
+      stripeAccount = await stripe.accounts.retrieve(user.stripeAccountId);
     } catch {
       stripeAccount = null;
+    }
+
+    try {
+      stripeBalance = await retrieveConnectedAccountBalance(user.stripeAccountId);
+    } catch {
+      stripeBalance = null;
     }
   }
 
@@ -120,6 +129,7 @@ export default async function SellerPage({
   ]);
   const currentlyDue = stripeAccount?.requirements?.currently_due ?? [];
   const eventuallyDue = stripeAccount?.requirements?.eventually_due ?? [];
+  const balanceSummary = stripeBalance ? summarizeStripeBalance(stripeBalance) : null;
   const activeCount = inventory.filter((listing) => listing.status === "active").length;
   const draftCount = inventory.filter((listing) => listing.status === "draft").length;
   const archivedCount = inventory.filter((listing) => listing.status === "archived").length;
@@ -446,6 +456,18 @@ export default async function SellerPage({
               description="See connected account state, onboarding progress, and payout readiness in one place."
             />
             <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <Spec
+                label="Available balance"
+                value={balanceSummary ? formatCurrency(balanceSummary.availableCents / 100) : "Unavailable"}
+              />
+              <Spec
+                label="Pending balance"
+                value={balanceSummary ? formatCurrency(balanceSummary.pendingCents / 100) : "Unavailable"}
+              />
+              <Spec
+                label="Instant available"
+                value={balanceSummary ? formatCurrency(balanceSummary.instantAvailableCents / 100) : "Unavailable"}
+              />
               <Spec label="Stripe configured" value={stripeEnabled ? "Yes" : "No"} />
               <Spec label="Connected account" value={user.stripeAccountId || "Not connected"} />
               <Spec label="Onboarding complete" value={user.stripeOnboardingComplete ? "Yes" : "No"} />
@@ -453,6 +475,12 @@ export default async function SellerPage({
               <Spec label="Payouts enabled" value={stripeAccount?.payouts_enabled ? "Yes" : "No"} />
               <Spec label="Details submitted" value={stripeAccount?.details_submitted ? "Yes" : "No"} />
             </div>
+
+            {balanceSummary?.hasOtherCurrencies ? (
+              <p className="mt-3 rounded-2xl bg-amber-100 px-4 py-3 text-sm text-amber-900">
+                This view shows USD balances only. Stripe returned at least one non-USD balance for this connected account.
+              </p>
+            ) : null}
 
             <div className="mt-5 rounded-[1.5rem] bg-white p-4">
               <p className="text-sm font-semibold text-stone-950">KYC items currently due</p>
