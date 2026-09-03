@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { areDebugRoutesEnabled } from "@/lib/debug-routes";
 import { getFitRecommendation } from "@/lib/fit";
 import { ensureSeedData, findUserByUsername, listMarketplace } from "@/lib/store";
 
 export async function GET(request: NextRequest) {
+  if (!areDebugRoutesEnabled()) {
+    return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  }
+
   await ensureSeedData();
 
   const title = request.nextUrl.searchParams.get("title");

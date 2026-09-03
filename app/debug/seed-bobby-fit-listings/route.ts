@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { areDebugRoutesEnabled } from "@/lib/debug-routes";
 import type {
   BuyerJacketMeasurements,
   BuyerTrouserMeasurements,
@@ -242,7 +243,26 @@ function buildSeedListings(
   ];
 }
 
+function disabledResponse() {
+  return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+}
+
 export async function GET() {
+  if (!areDebugRoutesEnabled()) {
+    return disabledResponse();
+  }
+
+  return NextResponse.json(
+    { ok: false, error: "Use POST to seed Bobby fit listings in a local debug environment." },
+    { status: 405, headers: { Allow: "POST" } }
+  );
+}
+
+export async function POST() {
+  if (!areDebugRoutesEnabled()) {
+    return disabledResponse();
+  }
+
   await ensureSeedData();
 
   const user = await findUserByUsername("bobbyveebee");

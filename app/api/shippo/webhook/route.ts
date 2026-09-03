@@ -6,6 +6,7 @@ import {
   updateOrderReturnTrackingFromProvider,
   updateOrderTrackingFromProvider
 } from "@/lib/store";
+import { verifyShippoWebhookRequest } from "@/lib/shippo-webhook-auth";
 
 function readTransactionObject(body: unknown) {
   if (!body || typeof body !== "object") {
@@ -54,7 +55,23 @@ function readTransactionId(record: Record<string, unknown>) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = (await request.json().catch(() => null)) as unknown;
+  const rawBody = await request.text();
+  const verification = verifyShippoWebhookRequest({
+    body: rawBody,
+    headers: request.headers,
+    url: request.url
+  });
+
+  if (!verification.ok) {
+    return NextResponse.json({ received: false, error: verification.message }, { status: verification.status });
+  }
+
+  let body: unknown = null;
+  try {
+    body = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    return NextResponse.json({ received: false }, { status: 400 });
+  }
   const transaction = readTransactionObject(body);
 
   if (!transaction) {

@@ -1,4 +1,6 @@
+import { notFound } from "next/navigation";
 import { AppShell, PageWrap } from "@/components/ui";
+import { areDebugRoutesEnabled } from "@/lib/debug-routes";
 import { ensureSeedData, findUserByUsername, isDatabaseConfigured } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +14,10 @@ function formatError(error: unknown) {
 }
 
 export default async function DatabaseHealthPage() {
+  if (!areDebugRoutesEnabled()) {
+    notFound();
+  }
+
   let status: "ok" | "error" = "ok";
   let summary = "Database check passed.";
   let details: string[] = [];

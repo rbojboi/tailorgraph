@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import {
+  CURRENT_SCHEMA_VERSION,
+  getRuntimeSchemaDisabledMessage,
+  shouldRunRuntimeSchemaInit
+} from "@/lib/runtime-schema";
 import type {
   BuyerProfile,
   Dispute,
@@ -86,7 +91,7 @@ const defaultNotificationPreferences: User["notificationPreferences"] = {
 
 const databaseUrl = process.env.DATABASE_URL;
 const databaseConfigured = Boolean(databaseUrl);
-const SCHEMA_VERSION = 34;
+const SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
 
 const globalForPg = globalThis as unknown as {
   tailorGraphPool?: Pool;
@@ -524,6 +529,11 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE IF NOT EXISTS tailorgraph_schema_migrations (
+      version INTEGER PRIMARY KEY,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
     CREATE UNIQUE INDEX IF NOT EXISTS message_threads_listing_unique
       ON message_threads (buyer_id, seller_id, listing_id)
       WHERE listing_id IS NOT NULL AND order_id IS NULL;
@@ -709,10 +719,21 @@ async function initSchema() {
   `);
 
   await client.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
+
+  await client.query(
+    `INSERT INTO tailorgraph_schema_migrations (version)
+     VALUES ($1)
+     ON CONFLICT (version) DO UPDATE SET applied_at = NOW()`,
+    [SCHEMA_VERSION]
+  );
 }
 
 async function ensureSchema() {
   if (!databaseConfigured) {
+    return;
+  }
+
+  if (!shouldRunRuntimeSchemaInit()) {
     return;
   }
 
@@ -722,6 +743,20 @@ async function ensureSchema() {
   }
 
   await globalForPg.tailorGraphSchemaReady;
+}
+
+export async function runSchemaMigrationsForDeployment() {
+  if (!databaseConfigured) {
+    throw new Error("DATABASE_URL is required to run database migrations.");
+  }
+
+  await initSchema();
+}
+
+export function assertRuntimeSchemaInitEnabled() {
+  if (!shouldRunRuntimeSchemaInit()) {
+    throw new Error(getRuntimeSchemaDisabledMessage());
+  }
 }
 
 function mapUser(row: Record<string, unknown>): User {

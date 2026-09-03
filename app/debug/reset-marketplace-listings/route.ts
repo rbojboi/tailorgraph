@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { areDebugRoutesEnabled } from "@/lib/debug-routes";
 import type {
   BuyerJacketMeasurements,
   BuyerTrouserMeasurements,
@@ -373,7 +374,26 @@ function shouldPreserve(listing: Listing) {
   return listing.sellerDisplayName === "bobbyveebee" && listing.title.includes("Brooks Brothers");
 }
 
+function disabledResponse() {
+  return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+}
+
 export async function GET() {
+  if (!areDebugRoutesEnabled()) {
+    return disabledResponse();
+  }
+
+  return NextResponse.json(
+    { ok: false, error: "Use POST to reset marketplace listings in a local debug environment." },
+    { status: 405, headers: { Allow: "POST" } }
+  );
+}
+
+export async function POST() {
+  if (!areDebugRoutesEnabled()) {
+    return disabledResponse();
+  }
+
   await ensureSeedData();
 
   const user = await findUserByUsername("bobbyveebee");
