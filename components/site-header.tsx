@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { AccountMenu } from "@/components/account-menu";
 import { countUnreadMessageThreadsForUser } from "@/lib/store";
 import { getCurrentUser } from "@/lib/auth";
@@ -25,8 +26,16 @@ export async function SiteHeader() {
   return (
     <header className="grain relative z-[100] border-b border-stone-300/70 px-4 py-4 sm:px-6 lg:px-8" style={{ backgroundColor: "var(--nav-surface)" }}>
       <div className="relative z-[100] mx-auto flex max-w-7xl flex-col gap-4 px-1 py-1 sm:flex-row sm:items-center sm:justify-between">
-        <Link href="/" className="editorial text-lg font-semibold tracking-[0.2em] text-stone-950">
-          LOGO
+        <Link href="/" className="inline-flex items-center gap-3" aria-label="TailorGraph home">
+          <Image
+            src="/brand/tailorgraph-logo.png"
+            alt="TailorGraph"
+            width={44}
+            height={44}
+            priority
+            className="h-11 w-11 rounded-[0.9rem] object-contain"
+          />
+          <span className="sr-only">TailorGraph</span>
         </Link>
         <nav className="flex flex-wrap items-center gap-5 sm:justify-end">
           {navItems.map((item) => (

@@ -4,7 +4,11 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "TailorGraph",
-  description: "Fit-first menswear marketplace MVP"
+  description: "Fit-first menswear marketplace MVP",
+  icons: {
+    icon: "/brand/tailorgraph-icon.png",
+    apple: "/brand/tailorgraph-icon.png"
+  }
 };
 
 export default function RootLayout({
