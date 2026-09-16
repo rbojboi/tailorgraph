@@ -7,7 +7,8 @@ https://github.com/hoppergee/heic-to
 Exact published distribution (includes src/ and esbuild.mjs):
 https://registry.npmjs.org/heic-to/-/heic-to-1.5.2.tgz
 License: /third-party/heic-to-LICENSE.txt
-GPL v3 incorporated by LGPL v3: https://www.gnu.org/licenses/gpl-3.0.txt
+GPL v3 incorporated by LGPL v3: /third-party/GPL-3.0.txt
+Upstream license: https://www.gnu.org/licenses/gpl-3.0.txt
 
 The library includes libheif (LGPL-3.0):
 https://github.com/strukturag/libheif
