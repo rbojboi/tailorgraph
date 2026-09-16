@@ -7,6 +7,9 @@ import {
   updateOrderTrackingFromProvider
 } from "@/lib/store";
 import { verifyShippoWebhookRequest } from "@/lib/shippo-webhook-auth";
+import { requirePool } from "@/lib/store";
+import { processReturn } from "@/lib/returns";
+import { deliverReturnNotifications } from "@/lib/return-notifications";
 
 function readTransactionObject(body: unknown) {
   if (!body || typeof body !== "object") {
@@ -48,9 +51,9 @@ function readProvider(record: Record<string, unknown>) {
 
 function readTransactionId(record: Record<string, unknown>) {
   return (
-    readString(record, "object_id") ||
     readString(record, "transaction") ||
-    readNestedString(record, "transaction", "object_id")
+    readNestedString(record, "transaction", "object_id") ||
+    readString(record, "object_id")
   );
 }
 
@@ -80,9 +83,19 @@ export async function POST(request: NextRequest) {
 
   const transactionId = readTransactionId(transaction);
 
-  if (!transactionId) {
-    return NextResponse.json({ received: true });
+  // track_updated carries a tracking object, whose object_id is not a label transaction ID.
+  const trackingNumber = readString(transaction, "tracking_number");
+  if (trackingNumber) {
+    const matches = await requirePool().query("SELECT id FROM orders WHERE return_tracking_number=$1", [trackingNumber]);
+    for (const match of matches.rows) await processReturn(match.id);
+    if (matches.rowCount) {
+      await deliverReturnNotifications();
+      revalidatePath("/buyer/orders");
+      revalidatePath("/seller");
+      return NextResponse.json({ received: true, kind: "return" });
+    }
   }
+  if (!transactionId) return NextResponse.json({ received: true });
 
   const outboundOrder = await findOrderByShippingProviderTransactionId(transactionId);
   if (outboundOrder) {
@@ -114,6 +127,8 @@ export async function POST(request: NextRequest) {
     trackingStatus: readTrackingStatus(transaction) || returnOrder.returnTrackingStatus,
     returnEta: readString(transaction, "eta") || returnOrder.returnEta
   });
+  await processReturn(returnOrder.id);
+  await deliverReturnNotifications();
 
   revalidatePath("/seller");
   revalidatePath(`/seller/orders/${returnOrder.id}`);

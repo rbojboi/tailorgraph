@@ -21,9 +21,8 @@ function DetailField({ label, value }: { label: string; value?: string }) {
 function getReturnPolicyLabel(policy: string) {
   switch (policy) {
     case "automatic_returns":
-      return "Automatic returns";
     case "seller_approval":
-      return "Returns with seller approval";
+      return "Returns allowed — buyer pays return postage";
     default:
       return "No returns";
   }

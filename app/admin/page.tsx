@@ -54,6 +54,7 @@ export default async function AdminPage({
             <div>
               <p className="eyebrow text-xs text-stone-500">Admin Dashboard</p>
               <h1 className="mt-3 text-4xl font-semibold text-stone-950">Platform operations</h1>
+              <Link href="/admin/returns" className="mt-3 block underline">Return payments, recovery and seller disputes</Link>
             </div>
           </div>
         </section>

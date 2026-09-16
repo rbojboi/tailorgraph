@@ -44,6 +44,7 @@ type ShippoShipmentResponse = {
 };
 
 type ShippoTransactionResponse = {
+  metadata?: string;
   object_id: string;
   status?: string;
   rate?: {
@@ -186,6 +187,7 @@ function mapRateOption(rate: ShippoRate): ShippoRateOption {
 async function shippoRequest<T>(path: string, init: RequestInit) {
   const response = await fetch(`${SHIPPO_API_BASE}${path}`, {
     ...init,
+    signal: init.signal || AbortSignal.timeout(15000),
     headers: {
       ...getShippoHeaders(),
       ...(init.headers || {})
@@ -338,6 +340,7 @@ export async function purchaseShippoLabelForRate(input: {
   shipmentId: string;
   rateId: string;
   rate?: ShippoRateOption | null;
+  metadata?: string;
 }): Promise<ShippoLabelPurchase> {
   const transaction = await shippoRequest<ShippoTransactionResponse>("/transactions/", {
     method: "POST",
@@ -345,7 +348,7 @@ export async function purchaseShippoLabelForRate(input: {
       rate: input.rateId,
       async: false,
       label_file_type: "PDF",
-      metadata: `order:${input.orderId}`
+      metadata: input.metadata || `order:${input.orderId}`
     })
   });
 
@@ -369,6 +372,30 @@ export async function purchaseShippoLabelForRate(input: {
       ? Number(transaction.rate?.amount)
       : input.rate?.amount ?? null,
     selectedRateCurrency: transaction.rate?.currency || input.rate?.currency || null
+  };
+}
+
+export async function getShippoReturnTracking(carrier: string, trackingNumber: string) {
+  // Shippo uses carrier tokens, not the display name returned by rates.
+  const token = carrier.trim().toLowerCase().replace(/\s+/g, "_");
+  return shippoRequest<{
+    carrier: string; tracking_number: string;
+    tracking_status: { status: string; status_date: string } | null;
+    tracking_history: Array<{ status: string; status_date: string }>;
+  }>(`/tracks/${encodeURIComponent(token)}/${encodeURIComponent(trackingNumber)}`, { method: "GET" });
+}
+
+export async function recoverShippoReturnLabel(transactionId: string, paymentId: string, shipmentId: string, rateId: string): Promise<ShippoLabelPurchase> {
+  const t = await shippoRequest<ShippoTransactionResponse>(`/transactions/${encodeURIComponent(transactionId)}`, { method: "GET" });
+  if (t.metadata !== `return-label:${paymentId}` || t.status !== "SUCCESS" || !t.tracking_number) {
+    throw new Error("This successful Shippo transaction does not belong to the return-label payment.");
+  }
+  return {
+    carrier: t.rate?.provider || "Shippo", trackingNumber: t.tracking_number,
+    trackingUrl: t.tracking_url_provider || null, trackingStatus: t.tracking_status || null,
+    shippingEta: t.eta || null, shippingLabelUrl: t.label_url || null, shippingQrCodeUrl: t.qr_code_url || null,
+    shippingProvider: "shippo", shippingProviderShipmentId: shipmentId, shippingProviderRateId: rateId,
+    shippingProviderTransactionId: t.object_id, selectedRateAmount: null, selectedRateCurrency: null
   };
 }
 

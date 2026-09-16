@@ -342,14 +342,15 @@ async function sendEmailNotification(input: EmailInput) {
   const from = input.fromOverride || getEmailSenderForCategory(category);
   const emailReplyTo = input.replyToOverride ?? getReplyToForCategory(category, from);
 
-  await getResendClient().emails.send({
+  const result = await getResendClient().emails.send({
     from,
     to: [recipient],
     replyTo: emailReplyTo,
     subject: input.subject,
     html: input.html,
     text: input.text
-  });
+  }, input.skipDedupe ? undefined : { idempotencyKey: input.eventKey });
+  if (result.error) throw new Error(`Email delivery failed: ${result.error.message}`);
 
   if (!input.skipDedupe) {
     await recordNotificationDelivery({
@@ -1048,4 +1049,10 @@ export function getEstimatedArrivalLabel(order: Order, listing: Listing | null) 
   const purchasedAt = new Date(order.createdAt);
   const estimatedShipBy = addBusinessDays(purchasedAt, listing?.processingDays ?? 3);
   return formatShortDate(addBusinessDays(estimatedShipBy, 5));
+}
+
+export async function sendReturnEmail(to: string, eventKey: string, subject: string, text: string, url: string) {
+  if (!isEmailNotificationConfigured()) throw new Error("Return email delivery is not configured");
+  await sendEmailNotification({ to, eventKey, eventType: "return_update", category: "support", subject, text,
+    html: renderEmailLayout({ title: subject, introParagraphs: [text], primaryAction: { label: "View return", url } }) });
 }

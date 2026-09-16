@@ -282,7 +282,8 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
         </div>
       ) : null}
 
-      {order.status === "issue_open" ? (
+      {order.returnStatus ? <Link href={`/seller/orders/${order.id}/return`} className="mt-4 block underline">Inspect return or report a problem</Link> : null}
+      {order.status === "issue_open" && !order.stripePaymentIntentId && !order.returnStatus ? (
         <form action={resolveIssueAction} className="mt-4 grid gap-3 sm:grid-cols-3">
           <input type="hidden" name="orderId" value={order.id} />
           <Select
@@ -290,9 +291,7 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
             label="Resolution"
             defaultValue="processing"
             options={[
-              ["processing", "Keep order active"],
-              ["refund", "Refund and relist"],
-              ["cancel", "Cancel and relist"]
+              ["processing", "Keep order active"]
             ]}
           />
           <Input name="sellerNotes" label="Resolution notes" defaultValue={order.sellerNotes || ""} type="text" />
