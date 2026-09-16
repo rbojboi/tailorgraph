@@ -3,13 +3,12 @@ import { extname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { put } from "@vercel/blob";
 import type { ListingMedia } from "@/lib/types";
+import { isHeifPhoto } from "@/lib/listing-photo-format";
 
 const allowedMimeTypes = new Set([
   "image/jpeg",
   "image/jpg",
-  "image/png",
-  "image/heic",
-  "image/heif"
+  "image/png"
 ]);
 
 function safeName(name: string) {
@@ -35,8 +34,11 @@ export async function saveListingMediaFiles(
   }
 
   for (const file of validFiles) {
+    if (isHeifPhoto(file)) {
+      throw new Error("HEIC/HEIF photos must finish converting to JPG before upload. Re-select your photos and try again.");
+    }
     if (!allowedMimeTypes.has(file.type)) {
-      throw new Error("Only JPG, PNG, HEIC, and HEIF uploads are supported right now.");
+      throw new Error("Only JPG and PNG uploads are supported. HEIC/HEIF photos are converted to JPG in your browser.");
     }
   }
 
@@ -49,13 +51,7 @@ export async function saveListingMediaFiles(
   for (const file of validFiles) {
     const extension =
       extname(file.name) ||
-      (file.type === "image/png"
-        ? ".png"
-        : file.type === "image/heic"
-          ? ".heic"
-          : file.type === "image/heif"
-            ? ".heif"
-            : ".jpg");
+      (file.type === "image/png" ? ".png" : ".jpg");
     const filename = `${randomUUID()}-${safeName(file.name || `upload${extension}`)}`;
     let url: string;
 

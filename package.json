@@ -26,6 +26,7 @@
     "better-sqlite3": "^12.8.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.1",
+    "heic-to": "1.5.2",
     "next": "^16.2.1",
     "pg": "^8.20.0",
     "postcss": "^8.5.8",

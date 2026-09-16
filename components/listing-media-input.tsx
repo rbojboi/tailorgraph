@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { isHeifPhoto } from "@/lib/listing-photo-format";
+import { prepareListingPhoto } from "@/lib/listing-photo";
 import type { ListingMedia } from "@/lib/types";
 
 type MediaItem = {
@@ -13,25 +15,43 @@ function buildId(file: File) {
   return `${file.name}-${file.size}-${file.type}`;
 }
 
-function mediaTypeLabel(file: File) {
-  return "Image";
-}
-
 export function ListingMediaInput({
   required = true,
-  existingMedia = []
+  existingMedia = [],
+  onProcessingChange
 }: {
   required?: boolean;
   existingMedia?: ListingMedia[];
+  onProcessingChange?: (processing: boolean) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const itemsRef = useRef<MediaItem[]>([]);
+  const processingRef = useRef(false);
+  const mountedRef = useRef(false);
   const [items, setItems] = useState<MediaItem[]>([]);
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  function isAllowedFileType(file: File) {
-    return ["image/jpeg", "image/jpg", "image/png", "image/heic", "image/heif"].includes(file.type);
-  }
+  useEffect(() => {
+    mountedRef.current = true;
+    const form = inputRef.current?.form;
+    // Also blocks Enter/requestSubmit before React has rendered disabled buttons.
+    const guardSubmit = (event: SubmitEvent) => {
+      if (processingRef.current) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    form?.addEventListener("submit", guardSubmit, true);
+    return () => {
+      mountedRef.current = false;
+      form?.removeEventListener("submit", guardSubmit, true);
+      itemsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    };
+  }, []);
 
   const manifest = useMemo(
     () =>
@@ -59,67 +79,89 @@ export function ListingMediaInput({
     inputRef.current.files = transfer.files;
   }
 
-  function appendFiles(fileList: FileList | null) {
-    if (!fileList) {
+  function commitItems(nextItems: MediaItem[]) {
+    syncInputFiles(nextItems);
+    itemsRef.current = nextItems;
+    setItems(nextItems);
+  }
+
+  async function appendFiles(fileList: FileList | null) {
+    if (!fileList) return;
+    if (processingRef.current) {
+      syncInputFiles(itemsRef.current);
       return;
     }
-
-    setItems((current) => {
-      const existingIds = new Set(current.map((item) => item.id));
-      const additions = Array.from(fileList)
-        .filter((file) => file.size > 0 && isAllowedFileType(file))
-        .map((file) => ({
-          id: buildId(file),
-          file,
-          previewUrl: URL.createObjectURL(file)
-        }))
-        .filter((item) => !existingIds.has(item.id));
-
-      const nextItems = [...current, ...additions].slice(0, 20);
-      syncInputFiles(nextItems);
-      return nextItems;
+    const files = Array.from(fileList);
+    // Never leave raw HEIF files in the submitted input, including on failure.
+    syncInputFiles(itemsRef.current);
+    if (!files.length) return;
+    const seen = new Set(itemsRef.current.map((item) => item.id));
+    const additions = files.filter((file) => {
+      const id = buildId(file);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
     });
+    setError("");
+    setProgress("");
+    if (itemsRef.current.length + additions.length > 20) {
+      setError("Upload up to 20 photos per listing. Remove a photo or choose fewer files.");
+      return;
+    }
+    if (!additions.length) return;
+
+    processingRef.current = true;
+    setProcessing(true);
+    onProcessingChange?.(true);
+    try {
+      const prepared: Array<{ id: string; file: File }> = [];
+      // Decode one at a time to limit memory use on phones. Commit the whole
+      // selection only after every photo succeeds, preserving previous photos.
+      for (const [index, source] of additions.entries()) {
+        setProgress(`${isHeifPhoto(source) ? "Converting to JPG" : "Preparing photo"} ${index + 1} of ${additions.length}…`);
+        const file = await prepareListingPhoto(source);
+        if (!mountedRef.current) return;
+        prepared.push({ id: buildId(source), file });
+      }
+      commitItems([...itemsRef.current, ...prepared.map((item) => ({
+        ...item, previewUrl: URL.createObjectURL(item.file)
+      }))]);
+      setProgress("Photos ready. HEIC and HEIF photos have been converted to JPG.");
+    } catch (cause) {
+      if (mountedRef.current) {
+        setProgress("");
+        setError(`${cause instanceof Error ? cause.message : "Unable to prepare these photos. Please try again."} No photos from this selection were added; your previous selection is unchanged.`);
+      }
+    } finally {
+      if (mountedRef.current) {
+        processingRef.current = false;
+        setProcessing(false);
+        onProcessingChange?.(false);
+      }
+    }
   }
 
   function removeItem(id: string) {
-    setItems((current) => {
-      const nextItems = current.filter((item) => item.id !== id);
-      syncInputFiles(nextItems);
-      return nextItems;
-    });
+    if (processingRef.current) return;
+    const removed = itemsRef.current.find((item) => item.id === id);
+    commitItems(itemsRef.current.filter((item) => item.id !== id));
+    if (removed) URL.revokeObjectURL(removed.previewUrl);
   }
 
   function moveItem(id: string, direction: -1 | 1) {
-    setItems((current) => {
-      const index = current.findIndex((item) => item.id === id);
-      const nextIndex = index + direction;
-
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
-        return current;
-      }
-
-      const nextItems = [...current];
-      const [item] = nextItems.splice(index, 1);
-      nextItems.splice(nextIndex, 0, item);
-      syncInputFiles(nextItems);
-      return nextItems;
-    });
+    const index = itemsRef.current.findIndex((item) => item.id === id);
+    if (index >= 0) moveItemToIndex(id, index + direction);
   }
 
   function moveItemToIndex(id: string, targetIndex: number) {
-    setItems((current) => {
-      const index = current.findIndex((item) => item.id === id);
-
-      if (index < 0 || targetIndex < 0 || targetIndex >= current.length || index === targetIndex) {
-        return current;
-      }
-
-      const nextItems = [...current];
-      const [item] = nextItems.splice(index, 1);
-      nextItems.splice(targetIndex, 0, item);
-      syncInputFiles(nextItems);
-      return nextItems;
-    });
+    if (processingRef.current) return;
+    const current = itemsRef.current;
+    const index = current.findIndex((item) => item.id === id);
+    if (index < 0 || targetIndex < 0 || targetIndex >= current.length || index === targetIndex) return;
+    const nextItems = [...current];
+    const [item] = nextItems.splice(index, 1);
+    nextItems.splice(targetIndex, 0, item);
+    commitItems(nextItems);
   }
 
   function reorderByDrop(targetId: string) {
@@ -139,7 +181,7 @@ export function ListingMediaInput({
   }
 
   return (
-    <div className="sm:col-span-2 rounded-[1.5rem] border border-dashed border-stone-300 bg-white p-4">
+    <div aria-busy={processing} className="sm:col-span-2 rounded-[1.5rem] border border-dashed border-stone-300 bg-white p-4">
       <p className="text-sm font-semibold text-stone-950">
         Listing Media
         {required ? <span className="ml-1 text-rose-700">*</span> : null}
@@ -155,6 +197,7 @@ export function ListingMediaInput({
       >
         <p className="text-sm font-medium text-stone-900">
           Drag or browse up to 20 JPG, PNG, HEIC, or HEIF files. Reorder before publishing to control buyer-facing order.
+          {" HEIC and HEIF photos (up to 25 MB each) are automatically converted to JPG before upload."}
           {!required && existingMedia.length ? " Leave empty to keep current media." : ""}
         </p>
         <input
@@ -162,6 +205,8 @@ export function ListingMediaInput({
           name="media"
           type="file"
           multiple
+          disabled={processing}
+          aria-label="Listing photos"
           required={required && items.length === 0 && existingMedia.length === 0}
           accept=".jpg,.jpeg,.png,.heic,.heif,image/jpeg,image/png,image/heic,image/heif"
           onChange={(event) => appendFiles(event.target.files)}
@@ -170,8 +215,9 @@ export function ListingMediaInput({
         <div className="mt-5 flex flex-wrap items-center justify-center gap-4 text-sm text-stone-700">
           <button
             type="button"
+            disabled={processing}
             onClick={() => inputRef.current?.click()}
-            className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-semibold text-white"
+            className="rounded-full bg-stone-950 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
             Choose Files
           </button>
@@ -179,11 +225,14 @@ export function ListingMediaInput({
             {items.length
               ? `${items.length} file${items.length === 1 ? "" : "s"} selected`
               : existingMedia.length
-                ? "Add more files or leave current media as is"
+                ? "Choose replacement photos or keep current media"
                 : "No files chosen"}
           </span>
         </div>
       </div>
+
+      <p role="status" aria-live="polite" className="mt-3 text-sm text-stone-700">{progress}</p>
+      {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
 
       <input type="hidden" name="mediaManifest" value={manifest} />
 
@@ -215,7 +264,7 @@ export function ListingMediaInput({
             {items.map((item, index) => (
               <article
                 key={item.id}
-                draggable
+                draggable={!processing}
                 onDragStart={() => setDraggingId(item.id)}
                 onDragOver={(event) => {
                   event.preventDefault();
@@ -254,11 +303,12 @@ export function ListingMediaInput({
                 </p>
                 <p className="mt-2 line-clamp-2 text-sm font-semibold text-stone-900">{item.file.name}</p>
                 <p className="mt-1 text-xs text-stone-600">
-                  {mediaTypeLabel(item.file)} - {(item.file.size / 1024 / 1024).toFixed(1)} MB
+                  Image - {(item.file.size / 1024 / 1024).toFixed(1)} MB
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
+                    disabled={processing || index === 0}
                     onClick={() => moveItem(item.id, -1)}
                     className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold text-stone-800"
                   >
@@ -266,6 +316,7 @@ export function ListingMediaInput({
                   </button>
                   <button
                     type="button"
+                    disabled={processing || index === items.length - 1}
                     onClick={() => moveItem(item.id, 1)}
                     className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold text-stone-800"
                   >
@@ -273,6 +324,7 @@ export function ListingMediaInput({
                   </button>
                   <button
                     type="button"
+                    disabled={processing}
                     onClick={() => removeItem(item.id)}
                     className="rounded-full border border-stone-300 px-3 py-1 text-xs font-semibold text-stone-800"
                   >
