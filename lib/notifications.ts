@@ -253,11 +253,17 @@ function getReplyToForCategory(category: EmailSenderCategory, sender: string) {
     return undefined;
   }
 
+  const supportReplyTo = category === "support" ? process.env.EMAIL_REPLY_TO_SUPPORT?.trim() : undefined;
+  const configuredReplyTo = supportReplyTo || process.env.EMAIL_REPLY_TO?.trim();
+  if (configuredReplyTo) {
+    return configuredReplyTo;
+  }
+
   const parsedSender = parseEmailSender(sender);
   const replyLocalPart = senderLocalPartForCategory(category);
 
   if (!parsedSender) {
-    return process.env.EMAIL_REPLY_TO || `${replyLocalPart}@tailorgraph.com`;
+    return `${replyLocalPart}@tailorgraph.com`;
   }
 
   return `${replyLocalPart}@${deriveReplyDomain(parsedSender.domain)}`;
@@ -1017,10 +1023,11 @@ export async function sendSenderTestNotification(input: {
   const parsedSender = parseEmailSender(sender);
   const senderAddress = parsedSender?.address ?? sender;
   const senderLabel = parsedSender?.name ? `${parsedSender.name} <${parsedSender.address}>` : senderAddress;
+  const replyTo = getReplyToForCategory(input.category, sender);
   const replyBehavior =
-    input.category === "no_reply"
-      ? "This sender is configured without a reply-to address."
-      : `Replies should go back to ${senderAddress}.`;
+    replyTo
+      ? `Replies should go back to ${replyTo}.`
+      : "This sender is configured without a reply-to address.";
 
   await sendEmailNotification({
     eventKey: input.runToken
