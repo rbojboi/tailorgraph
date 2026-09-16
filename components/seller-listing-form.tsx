@@ -273,6 +273,7 @@ export function SellerListingForm({
 }) {
   const [category, setCategory] = useState<string>(listing?.category ?? "jacket");
   const [price, setPrice] = useState(listing ? listing.price.toFixed(2) : "");
+  const [mediaProcessing, setMediaProcessing] = useState(false);
   const isShirt = category === "shirt";
   const isSweater = category === "sweater";
   const primarySizeOptions = getPrimarySizeOptions(category);
@@ -324,7 +325,7 @@ export function SellerListingForm({
     <form action={action} noValidate className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
       {listing ? <input type="hidden" name="listingId" value={listing.id} /> : null}
       <input type="hidden" name="listingIntent" value={listingIntent} readOnly />
-      <ListingMediaInput required={!listing} existingMedia={listing?.media ?? []} />
+      <ListingMediaInput required={!listing} existingMedia={listing?.media ?? []} onProcessingChange={setMediaProcessing} />
       <Input
         name="title"
         label="Title (max. 60 characters)"
@@ -575,6 +576,7 @@ export function SellerListingForm({
               <button
                 type="submit"
                 formAction={warningAction}
+                disabled={mediaProcessing}
                 formNoValidate
                 className="rounded-full border border-stone-900 bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
               >
@@ -969,16 +971,18 @@ export function SellerListingForm({
         <button
           type="submit"
           onClick={(event) => setSubmitIntent(listing ? listing.status : "publish", event.currentTarget.form)}
-          className="rounded-full bg-stone-950 px-4 py-3 text-sm font-semibold text-white"
+          disabled={mediaProcessing}
+          className="rounded-full bg-stone-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {submitLabel}
+          {mediaProcessing ? "Preparing photos…" : submitLabel}
         </button>
         {showDraftButton ? (
           <button
             type="submit"
             formNoValidate
             onClick={(event) => setSubmitIntent("save_draft", event.currentTarget.form)}
-            className="rounded-full border border-stone-300 bg-white px-4 py-3 text-sm font-semibold text-stone-900"
+            disabled={mediaProcessing}
+            className="rounded-full border border-stone-300 bg-white px-4 py-3 text-sm font-semibold text-stone-900 disabled:opacity-50"
           >
             Save as Draft
           </button>

@@ -1,0 +1,18 @@
+TailorGraph uses heic-to 1.5.2 by Hopper Gee, unmodified, for optional
+in-browser HEIC/HEIF conversion. It is loaded as a separate asynchronous
+module and is licensed under LGPL-3.0-or-later, without warranty.
+
+Source, including the bundled libheif decoder and build scripts:
+https://github.com/hoppergee/heic-to
+Exact published distribution (includes src/ and esbuild.mjs):
+https://registry.npmjs.org/heic-to/-/heic-to-1.5.2.tgz
+License: /third-party/heic-to-LICENSE.txt
+GPL v3 incorporated by LGPL v3: https://www.gnu.org/licenses/gpl-3.0.txt
+
+The library includes libheif (LGPL-3.0):
+https://github.com/strukturag/libheif
+
+TailorGraph integration source and package lock:
+https://github.com/rbojboi/tailorgraph
+The conversion module can be replaced by changing the heic-to dependency
+and rebuilding with npm run build; it is not modified by this integration.
