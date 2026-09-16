@@ -321,7 +321,7 @@ export function SellerListingForm({
   }
 
   return (
-    <form action={action} noValidate className="mt-5 grid gap-3 sm:grid-cols-2">
+    <form action={action} noValidate className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
       {listing ? <input type="hidden" name="listingId" value={listing.id} /> : null}
       <input type="hidden" name="listingIntent" value={listingIntent} readOnly />
       <ListingMediaInput required={!listing} existingMedia={listing?.media ?? []} />

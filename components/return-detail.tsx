@@ -18,7 +18,7 @@ export async function ReturnDetail({ orderId, role, error, saved }: { orderId: s
   const deadline = ret?.received_at ? new Date(ret.received_at.getTime() + 48 * 3600000) : null;
   const canInspect = role === "seller" && ret && deadline && deadline.getTime() > now && !ret.disputed_at && !ret.closed_at;
   const inputClass = "rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm";
-  const buttonClass = "w-fit rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white";
+  const buttonClass = "inline-flex min-h-11 w-fit max-w-full items-center justify-center rounded-full bg-stone-950 px-5 py-3 text-center text-sm font-semibold text-white";
   const requestError = returnRequestError(order);
   return <AppShell><PageWrap maxWidth="max-w-4xl"><section className="panel rounded-[2rem] p-6 sm:p-8 space-y-6">
     <Link href={role === "buyer" ? "/buyer/orders" : `/seller/orders/${orderId}`} className="text-sm underline">Back to order</Link>

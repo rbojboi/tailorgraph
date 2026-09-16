@@ -121,10 +121,10 @@ export default async function HomePage() {
           </div>
           <div className="absolute inset-0 bg-gradient-to-r from-[rgba(252,252,250,0.96)] via-[rgba(252,252,250,0.82)] via-42% to-[rgba(252,252,250,0.12)] to-[82%]" />
           <div className="absolute inset-0 bg-gradient-to-t from-[rgba(252,252,250,0.14)] via-transparent to-[rgba(252,252,250,0.06)]" />
-          <div className="relative z-10 flex min-h-[26rem] items-center px-4 sm:min-h-[29rem] sm:px-5 lg:min-h-[36rem] lg:px-6">
+          <div className="relative z-10 flex min-h-[26rem] items-center px-4 py-8 sm:min-h-[29rem] sm:px-5 lg:min-h-[36rem] lg:px-6">
               <div className="min-w-0 max-w-xl self-center">
                 <div className="editorial flex flex-col gap-5 text-stone-950">
-                  <h1 className="text-[3rem] font-semibold leading-[0.94] sm:text-[3.8rem]">
+                  <h1 className="text-[clamp(2.25rem,11vw,3rem)] font-semibold leading-[0.94] sm:text-[3.8rem]">
                     TailorGraph
                   </h1>
                   <p className="text-[1.5rem] font-semibold leading-tight sm:text-[1.9rem]">
@@ -138,10 +138,10 @@ export default async function HomePage() {
                   </p>
                 </div>
                 <div className="mt-8 flex flex-wrap gap-3">
-                  <Link href="/marketplace" className="inline-flex items-center rounded-[0.95rem] bg-[var(--accent)] px-7 py-4 text-[1.05rem] font-semibold text-white transition hover:brightness-95">
+                  <Link href="/marketplace" className="inline-flex w-full items-center justify-center rounded-[0.95rem] bg-[var(--accent)] px-5 py-4 text-center text-[1.05rem] font-semibold text-white transition hover:brightness-95 sm:w-auto sm:px-7">
                     Browse Marketplace
                   </Link>
-                  <Link href="/how-to-use" className="inline-flex items-center rounded-[0.95rem] border border-stone-300 bg-white px-7 py-4 text-[1.05rem] font-semibold text-stone-700 transition hover:border-stone-500 hover:bg-stone-50 hover:text-stone-950">
+                  <Link href="/how-to-use" className="inline-flex w-full items-center justify-center rounded-[0.95rem] border border-stone-300 bg-white px-5 py-4 text-center text-[1.05rem] font-semibold text-stone-700 transition hover:border-stone-500 hover:bg-stone-50 hover:text-stone-950 sm:w-auto sm:px-7">
                     Learn How It Works
                   </Link>
                 </div>
