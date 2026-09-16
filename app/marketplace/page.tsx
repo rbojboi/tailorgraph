@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 import {
   addToCartAction,
   buyNowAction,
@@ -7,6 +7,7 @@ import {
   toggleSaveListingAction
 } from "@/app/actions";
 import { MarketplaceFilterSidebar } from "@/components/marketplace-filter-sidebar";
+import { MarketplaceFilterPanel } from "@/components/marketplace-filter-panel";
 import { MarketplaceSavedSearchActions } from "@/components/marketplace-saved-search-actions";
 import { MarketplaceSortControl } from "@/components/marketplace-sort-control";
 import { AppShell, PageWrap } from "@/components/ui";
@@ -1840,8 +1841,8 @@ export default async function MarketplacePage({
         </section>
 
         <section className="marketplace-main-pane -mt-3 pt-2">
-          <div className="grid gap-8 px-5 pb-5 xl:grid-cols-[0.7fr_1.3fr] xl:px-6 xl:pb-6">
-            <aside className="marketplace-tool-panel h-fit self-start rounded-[0.9rem] p-5 pb-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 px-3 pb-4 sm:gap-8 sm:px-5 sm:pb-5 xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] xl:px-6 xl:pb-6">
+            <MarketplaceFilterPanel activeFilterCount={marketplaceResults.activeFilterCount}>
               <div>
                 <h2 className="editorial text-2xl font-semibold text-stone-950">Filter by Fit, Measurements, and Garment Details</h2>
                 <p className="mt-2 text-sm leading-6 text-stone-700">
@@ -2019,9 +2020,9 @@ export default async function MarketplacePage({
                       </div>
                   )}
                 </form>
-              </aside>
+              </MarketplaceFilterPanel>
 
-          <div className="flex flex-col gap-6 xl:border-l xl:border-stone-300/70 xl:pl-8">
+          <div className="flex min-w-0 flex-col gap-6 xl:border-l xl:border-stone-300/70 xl:pl-8">
             <div className="marketplace-results-bar flex flex-col gap-3 px-1 py-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-4 text-sm text-stone-600">
                 <span className="text-sm font-semibold text-stone-900">

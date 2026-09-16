@@ -14,7 +14,7 @@ export function PageWrap({
   children: ReactNode;
   maxWidth?: string;
 }) {
-  return <div className={`mx-auto flex ${maxWidth} flex-col gap-6`}>{children}</div>;
+  return <div className={`mx-auto flex min-w-0 ${maxWidth} flex-col gap-6`}>{children}</div>;
 }
 
 export function SectionTitle({
@@ -57,7 +57,7 @@ export function Input({
   maxLength?: number;
 }) {
   return (
-    <label className="flex flex-col gap-2">
+    <label className="flex min-w-0 flex-col gap-2">
       <span className="text-sm font-medium text-stone-700">
         {label}
         {required ? <span className="ml-1 text-rose-700">*</span> : null}
@@ -71,7 +71,7 @@ export function Input({
         required={required}
         min={min}
         maxLength={maxLength}
-        className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
+        className="min-w-0 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
       />
     </label>
   );
@@ -91,7 +91,7 @@ export function Select({
   required?: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-2">
+    <label className="flex min-w-0 flex-col gap-2">
       <span className="text-sm font-medium text-stone-700">
         {label}
         {required ? <span className="ml-1 text-rose-700">*</span> : null}
@@ -100,7 +100,7 @@ export function Select({
         name={name}
         defaultValue={defaultValue}
         required={required}
-        className="rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
+        className="min-w-0 w-full rounded-2xl border border-stone-300 bg-white px-4 py-3 text-sm outline-none"
       >
         {options.map(([value, labelValue]) => (
           <option key={value} value={value}>
@@ -114,7 +114,7 @@ export function Select({
 
 export function Spec({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-2xl bg-white px-3 py-3">
+    <div className="min-w-0 break-words rounded-2xl bg-white px-3 py-3">
       <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{label}</p>
       <p className="mt-1 text-sm font-semibold text-stone-900">{value}</p>
     </div>

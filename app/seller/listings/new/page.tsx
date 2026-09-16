@@ -45,14 +45,14 @@ export default async function NewSellerListingPage({ searchParams }: PageProps) 
     <AppShell>
       <PageWrap>
         <section className="panel rounded-[2rem] px-6 py-8 sm:px-8">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
             <div className="min-w-0 flex-1">
               <p className="eyebrow text-xs text-stone-500">New Listing</p>
-              <h1 className="mt-3 text-4xl font-semibold text-stone-950">Create a New Listing</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-stone-950 sm:text-4xl">Create a New Listing</h1>
             </div>
             <Link
               href="/seller"
-              className="shrink-0 self-start rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800"
+              className="inline-flex min-h-11 max-w-full shrink-0 items-center justify-center self-start rounded-full border border-stone-300 bg-white px-4 py-2 text-center text-sm font-semibold text-stone-800"
             >
               Back to Seller Dashboard
             </Link>

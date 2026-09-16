@@ -794,9 +794,9 @@ export function MarketplaceFilterSidebar({
                         setSearchMode(nextSearchMode);
                         setFitProfileError(nextSearchMode === "flexible" && !hasFitMeasurements ? "best-fit" : null);
                       }}
-                      className="ui-sans h-5 w-full appearance-none border-0 bg-transparent p-0 text-[0.95rem] leading-5 text-stone-900 outline-none"
+                      className="ui-sans min-h-11 min-w-0 w-full border-0 bg-transparent py-1 text-[0.95rem] leading-5 text-stone-900 outline-none"
                     >
-                      <option value="browse">Browse Without Measurement Filters</option>
+                      <option value="browse">Browse all listings</option>
                       <option value="flexible">Best Fits for Me</option>
                       <option value="strict">Exact Measurements</option>
                     </select>
