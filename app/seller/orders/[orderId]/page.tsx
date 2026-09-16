@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
   buyShippoLabelAction,
-  confirmReturnAction,
   emailSellerShipmentLabelAction,
   shipOrderAction
 } from "@/app/actions";
@@ -91,13 +90,6 @@ export default async function SellerOrderFulfillmentPage({
   const hasReturnProviderLabel = Boolean(order.returnLabelUrl || order.returnQrCodeUrl);
   const returnFlowActive = order.status === "issue_open" || Boolean(order.issueReason) || hasReturnProviderLabel;
   const canBuyLabel = !order.carrier && (order.status === "paid" || order.status === "processing");
-  const canConfirmReturn =
-    returnFlowActive &&
-    order.returnsAccepted &&
-    order.returnPolicy === "seller_approval" &&
-    !hasReturnProviderLabel &&
-    order.returnStatus !== "approved" &&
-    order.returnStatus !== "label_created";
 
   return (
     <AppShell>
@@ -288,6 +280,7 @@ export default async function SellerOrderFulfillmentPage({
                 {returnFlowActive ? (
                   <div id="return-materials" className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
                     <p className="text-sm font-semibold text-amber-950">Return Materials</p>
+                    <Link href={`/seller/orders/${order.id}/return`} className="mt-3 block font-semibold underline">Return status, inspection and disputes</Link>
                     <p className="mt-2 text-sm leading-6 text-amber-900">
                       Buyer-to-seller return label details for this issue or return request.
                     </p>
@@ -296,21 +289,6 @@ export default async function SellerOrderFulfillmentPage({
                       <p className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-amber-950">
                         Reason: {order.issueReason}
                       </p>
-                    ) : null}
-
-                    {canConfirmReturn ? (
-                      <form action={confirmReturnAction} className="mt-4 rounded-[1.25rem] border border-amber-200 bg-white p-4">
-                        <input type="hidden" name="orderId" value={order.id} />
-                        <input type="hidden" name="returnTo" value={`/seller/orders/${order.id}`} />
-                        <p className="text-sm font-semibold text-stone-950">Confirm return</p>
-                        <p className="mt-2 text-sm leading-6 text-stone-700">
-                          Approve this return request so the buyer can create the return label from their account.
-                        </p>
-                        <Input name="sellerNotes" label="Seller notes" defaultValue={order.sellerNotes || ""} type="text" />
-                        <button className="mt-4 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
-                          Confirm Return
-                        </button>
-                      </form>
                     ) : null}
 
                     {returnFlowActive && !order.returnsAccepted ? (

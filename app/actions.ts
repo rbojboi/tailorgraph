@@ -54,7 +54,6 @@ import {
   markUserEmailVerified,
   markListingSold,
   markOrderDelivered,
-  markOrderPaidById,
   markUserStripeOnboardingComplete,
   reopenListing,
   reserveListing,
@@ -70,8 +69,6 @@ import {
   updateListing,
   updateBuyerAccount,
   updateOrderIssue,
-  updateOrderReturnShippingWithProvider,
-  updateOrderReturnStatus,
   updateOrderShipping,
   updateOrderShippingWithProvider,
   updateSellerLocation,
@@ -99,7 +96,9 @@ import {
   sendSupportRequestNotifications,
   sendWelcomeNotification
 } from "@/lib/notifications";
-import { purchaseShippoLabel, purchaseShippoLabelForRate, purchaseShippoReturnLabel } from "@/lib/shippo";
+import { purchaseShippoLabel, purchaseShippoLabelForRate } from "@/lib/shippo";
+import { requestReturn, startReturnLabelCheckout, getReturn } from "@/lib/returns";
+import { deliverReturnNotifications } from "@/lib/return-notifications";
 import { estimateShippingCost, estimateTailoringDistanceFromSellerLocation } from "@/lib/shipping";
 import { combineSplitSize } from "@/lib/sizing";
 import { resolveUsZipCode, sanitizeZipCode } from "@/lib/zip";
@@ -145,11 +144,7 @@ function stringValues(formData: FormData, key: string) {
 }
 
 function normalizeReturnPolicyInput(value: string): ReturnPolicy {
-  if (value === "automatic_returns" || value === "seller_approval" || value === "no_returns") {
-    return value;
-  }
-
-  return value === "yes" ? "seller_approval" : "no_returns";
+  return ["automatic_returns", "seller_approval", "yes"].includes(value) ? "automatic_returns" : "no_returns";
 }
 
 const supportRequestTopics: SupportRequestTopic[] = [
@@ -3682,172 +3677,36 @@ export async function confirmReturnAction(formData: FormData) {
 
   const orderId = stringValue(formData, "orderId");
   const returnTo = stringValue(formData, "returnTo") || `/seller/orders/${orderId}`;
-  const sellerNotes = stringValue(formData, "sellerNotes") || null;
   const order = await findOrderById(orderId);
 
   if (!order || order.sellerId !== user.id) {
     redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
   }
 
-  if (!order.returnsAccepted) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
-  }
-
-  if (order.returnLabelUrl || order.returnQrCodeUrl) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
-  }
-
-  await updateOrderReturnStatus(orderId, "approved", sellerNotes);
-
-  revalidatePath("/seller");
-  revalidatePath(`/seller/orders/${orderId}`);
-  revalidatePath("/buyer/orders");
-  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-approved`);
+  // Old forms must not create an untracked return or bypass buyer-paid labels.
+  redirect(`/seller/orders/${orderId}/return`);
 }
 
 export async function buyShippoReturnLabelAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/buyer/orders?authError=Add+DATABASE_URL+to+manage+returns");
   const user = await getCurrentUser();
-  if (!user) {
-    redirect("/?authError=Please+log+in");
-  }
-
   const orderId = stringValue(formData, "orderId");
-  const returnTo = stringValue(formData, "returnTo") || "/buyer/orders";
   const order = await findOrderById(orderId);
-
-  if (!order || order.buyerId !== user.id) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
-  }
-
-  if (!order.returnsAccepted) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
-  }
-
-  if (order.returnStatus !== "approved" && order.returnStatus !== "label_created") {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=The+seller+needs+to+confirm+this+return+before+you+can+create+a+label`);
-  }
-
-  if (order.returnLabelUrl || order.returnQrCodeUrl) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
-  }
-
-  const [listing, seller] = await Promise.all([findListingById(order.listingId), findUserById(order.sellerId)]);
-  if (!listing) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Listing+not+found+for+this+order`);
-  }
-
-  if (!seller) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Seller+account+not+found+for+this+order`);
-  }
-
-  let purchasedLabel;
-  try {
-    purchasedLabel = await purchaseShippoReturnLabel({
-      order,
-      listing,
-      buyer: user,
-      seller
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Shippo could not create a return label for this order.";
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(message)}`);
-  }
-
-  await updateOrderReturnShippingWithProvider(orderId, {
-    carrier: purchasedLabel.carrier,
-    trackingNumber: purchasedLabel.trackingNumber,
-    trackingUrl: purchasedLabel.trackingUrl,
-    trackingStatus: purchasedLabel.trackingStatus,
-    returnEta: purchasedLabel.shippingEta,
-    returnLabelUrl: purchasedLabel.shippingLabelUrl,
-    returnQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-    returnProvider: purchasedLabel.shippingProvider,
-    returnProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-    returnProviderRateId: purchasedLabel.shippingProviderRateId,
-    returnProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-    sellerNotes: null
-  });
-
-  revalidatePath("/seller");
-  revalidatePath(`/seller/orders/${orderId}`);
-  revalidatePath("/buyer/orders");
-  redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
+  if (!user || !order || order.buyerId !== user.id) redirect("/buyer/orders?authError=Order+not+found");
+  redirect(`/buyer/orders/${orderId}/return/shippo`);
 }
 
 export async function buySelectedShippoReturnRateAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/buyer/orders?authError=Add+DATABASE_URL+to+manage+returns");
   const user = await getCurrentUser();
-  if (!user) {
-    redirect("/?authError=Please+log+in");
-  }
-
+  if (!user) redirect("/login");
   const orderId = stringValue(formData, "orderId");
-  const shipmentId = stringValue(formData, "shipmentId");
-  const rateId = stringValue(formData, "rateId");
-  const returnTo = stringValue(formData, "returnTo") || `/buyer/orders/${orderId}/return/shippo`;
-  const provider = stringValue(formData, "provider");
-  const currency = stringValue(formData, "currency");
-  const serviceLevel = stringValue(formData, "serviceLevel");
-  const rateAmountRaw = stringValue(formData, "rateAmount");
-  const order = await findOrderById(orderId);
-
-  if (!order || order.buyerId !== user.id) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=Order+not+found`);
-  }
-
-  if (!order.returnsAccepted) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=This+order+was+not+marked+return-eligible`);
-  }
-
-  if (order.returnStatus !== "approved" && order.returnStatus !== "label_created") {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=The+seller+needs+to+confirm+this+return+before+you+can+create+a+label`);
-  }
-
-  if (order.returnLabelUrl || order.returnQrCodeUrl) {
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}saved=return-label`);
-  }
-
-  let purchasedLabel;
+  let url: string;
   try {
-    purchasedLabel = await purchaseShippoLabelForRate({
-      orderId,
-      shipmentId,
-      rateId,
-      rate: {
-        rateId,
-        provider: provider || "Shippo",
-        serviceLevel: serviceLevel || "Standard",
-        amount: rateAmountRaw ? Number(rateAmountRaw) : null,
-        currency: currency || null,
-        estimatedDays: null,
-        durationTerms: null
-      }
-    });
+    url = await startReturnLabelCheckout(orderId, user.id, stringValue(formData, "shipmentId"), stringValue(formData, "rateId"));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Shippo could not create a return label for this service.";
-    redirect(`${returnTo}${returnTo.includes("?") ? "&" : "?"}authError=${encodeURIComponent(message)}`);
+    const message = error instanceof Error ? error.message : "Unable to start return-label checkout";
+    redirect(`/buyer/orders?authError=${encodeURIComponent(message)}`);
   }
-
-  await updateOrderReturnShippingWithProvider(orderId, {
-    carrier: purchasedLabel.carrier,
-    trackingNumber: purchasedLabel.trackingNumber,
-    trackingUrl: purchasedLabel.trackingUrl,
-    trackingStatus: purchasedLabel.trackingStatus,
-    returnEta: purchasedLabel.shippingEta,
-    returnLabelUrl: purchasedLabel.shippingLabelUrl,
-    returnQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-    returnProvider: purchasedLabel.shippingProvider,
-    returnProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-    returnProviderRateId: purchasedLabel.shippingProviderRateId,
-    returnProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-    sellerNotes: null
-  });
-
-  revalidatePath("/seller");
-  revalidatePath(`/seller/orders/${orderId}`);
-  revalidatePath("/buyer/orders");
-  redirect(`/buyer/orders?saved=return-label`);
+  redirect(url);
 }
 
 export async function emailSellerShipmentLabelAction(formData: FormData) {
@@ -4084,24 +3943,26 @@ export async function openIssueAction(formData: FormData) {
     reason.toLowerCase().includes("return") ||
     issueCategories.some((category) => category.includes("return") || category.startsWith("returned_"));
   const isPlainReturnRequest = reason === "Return requested by buyer" && issueCategories.length === 0 && !issueDetails;
+  if (isPlainReturnRequest) {
+    try {
+      await requestReturn(orderId, user.id);
+      await deliverReturnNotifications();
+    } catch (error) {
+      redirect(`/buyer/orders?authError=${encodeURIComponent(error instanceof Error ? error.message : "Unable to request return")}`);
+    }
+    revalidatePath("/buyer/orders");
+    revalidatePath(`/seller/orders/${orderId}`);
+    redirect("/buyer/orders?saved=return-approved");
+  }
   if (isReturnRequest && !order.returnsAccepted) {
     redirect(`${returnTo || "/buyer/orders"}${(returnTo || "/buyer/orders").includes("?") ? "&" : "?"}authError=This+order+does+not+accept+returns.+You+can+report+an+issue+instead.`);
   }
 
-  await updateOrderIssue(orderId, "issue_open", issueSummary, null);
-  if (isReturnRequest && order.returnPolicy === "automatic_returns") {
-    await updateOrderReturnStatus(orderId, "approved", null);
+  if (await getReturn(orderId)) {
+    redirect(`/${order.buyerId === user.id ? "buyer" : "seller"}/orders/${orderId}/return`);
   }
-
-  if (isPlainReturnRequest) {
-    revalidatePath("/buyer");
-    revalidatePath("/buyer/orders");
-    revalidatePath("/seller");
-    revalidatePath(`/seller/orders/${orderId}`);
-    if (order.returnPolicy === "automatic_returns") {
-      redirect(withUpdatedQueryParam(returnTo || "/buyer/orders", "saved", "return-approved"));
-    }
-    redirect(returnTo || "/buyer/orders");
+  if (!["refunded", "canceled", "failed"].includes(order.status)) {
+    await updateOrderIssue(orderId, "issue_open", issueSummary, null);
   }
 
   const supportRequest = await createSupportRequest({
@@ -4145,10 +4006,6 @@ export async function openIssueAction(formData: FormData) {
   revalidatePath(`/seller/orders/${orderId}`);
   revalidatePath("/admin");
   revalidatePath("/support");
-  if (isReturnRequest && order.returnPolicy === "automatic_returns") {
-    redirect(withUpdatedQueryParam(returnTo || "/buyer/orders", "saved", "return-approved"));
-  }
-
   redirect(returnTo || `/${order.buyerId === user.id ? "buyer" : "seller"}?saved=issue`);
 }
 
@@ -4168,15 +4025,10 @@ export async function resolveIssueAction(formData: FormData) {
     redirect("/seller?authError=Order+not+found");
   }
 
-  if (resolution === "refund") {
-    await updateOrderIssue(orderId, "refunded", order.issueReason, sellerNotes);
-    await reopenListing(order.listingId);
-  } else if (resolution === "cancel") {
-    await updateOrderIssue(orderId, "canceled", order.issueReason, sellerNotes);
-    await reopenListing(order.listingId);
-  } else {
-    await updateOrderIssue(orderId, "processing", null, sellerNotes);
+  if (resolution === "refund" || resolution === "cancel" || await getReturn(orderId) || order.stripePaymentIntentId) {
+    redirect(`/seller/orders/${orderId}?authError=Paid+orders+use+the+automatic+return+workflow.+Contact+support+for+other+payment+issues.`);
   }
+  await updateOrderIssue(orderId, "processing", null, sellerNotes);
 
   revalidatePath("/seller");
   revalidatePath("/buyer");

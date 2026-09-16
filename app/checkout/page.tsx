@@ -45,9 +45,8 @@ function formatEstimatedArrivalRange(startBusinessDays: number, endBusinessDays:
 function getReturnPolicyLabel(policy: string) {
   switch (policy) {
     case "automatic_returns":
-      return "Automatic returns";
     case "seller_approval":
-      return "Returns with seller approval";
+      return "Returns allowed — buyer pays return postage";
     default:
       return "No returns";
   }
@@ -229,6 +228,7 @@ export default async function CheckoutPage({
                   <button className="mt-4 w-full rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white">
                     Purchase Items
                   </button>
+                  <p className="mt-3 text-sm text-stone-600">For eligible returns, we refund the full item price after carrier acceptance. Original shipping is excluded and you pay return postage. <Link href="/returns" className="underline">Read the return policy</Link>.</p>
                 </form>
               ) : (
                 <div className="mt-4 rounded-[1.25rem] bg-stone-100 px-4 py-4 text-sm text-stone-700">

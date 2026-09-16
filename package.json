@@ -9,7 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",
-    "test": "node --import ./scripts/register-ts-alias-loader.mjs --test lib/*.test.ts",
+    "test": "node --experimental-test-module-mocks --import ./scripts/register-ts-alias-loader.mjs --test lib/*.test.ts tests/*.test.mjs",
     "db:migrate": "node --import ./scripts/register-ts-alias-loader.mjs scripts/migrate-database.ts",
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/stripe/webhook",
     "stripe:trigger:checkout": "stripe trigger checkout.session.completed",
@@ -40,6 +40,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.20.0"
   }

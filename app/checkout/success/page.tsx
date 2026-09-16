@@ -6,7 +6,6 @@ import { openIssueAction } from "@/app/actions";
 import {
   findListingById,
   listOrdersByStripeCheckoutSessionId,
-  markListingSold,
   markOrderPaidBySessionId
 } from "@/lib/store";
 
@@ -85,14 +84,6 @@ export default async function CheckoutSuccessPage({
       await markOrderPaidBySessionId(
         sessionId,
         typeof session.payment_intent === "string" ? session.payment_intent : null
-      );
-      await Promise.all(
-        orders.map(async (order) => {
-          const listing = await findListingById(order.listingId);
-          if (listing?.status === "active") {
-            await markListingSold(order.listingId);
-          }
-        })
       );
     }
   }

@@ -74,6 +74,7 @@ function getTrackingUrl(carrier: string, trackingNumber: string) {
 }
 
 function getBuyerPurchaseStatus(order: { status: string; returnsAccepted: boolean; deliveredAt: string | null; returnStatus?: BuyerReturnStatus }) {
+  if (order.status === "refunded") return "Refunded";
   if (["canceled", "refunded", "failed"].includes(order.status)) {
     return "Canceled";
   }
@@ -108,7 +109,7 @@ function getBuyerPurchaseStatus(order: { status: string; returnsAccepted: boolea
     }
 
     if (order.deliveredAt) {
-      const returnWindowEnds = addBusinessDays(new Date(order.deliveredAt), 7);
+      const returnWindowEnds = new Date(Date.parse(order.deliveredAt) + 7 * 86400000);
       if (returnWindowEnds < new Date()) {
         return "Return Expired";
       }
@@ -262,6 +263,7 @@ export default async function BuyerOrdersPage({
             Your request has been sent to the seller for review.
           </div>
         ) : null}
+        {saved === "return-label-payment" ? <p className="rounded-2xl bg-emerald-100 p-4">Your return-label payment is being confirmed. Your label will appear in the return details shortly.</p> : null}
         {saved === "return-approved" ? (
           <div className="rounded-2xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
             Return approved. You can choose a return label when you are ready to ship the item back.
@@ -350,6 +352,7 @@ export default async function BuyerOrdersPage({
                   </div>
                   {order.returnStatus ? (
                     <div className="mt-4 rounded-[1.25rem] border border-amber-300 bg-amber-50 p-4">
+                      <Link href={`/buyer/orders/${order.id}/return`} className="mb-3 block font-semibold underline">View return and refund status</Link>
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-semibold text-amber-950">
@@ -369,9 +372,9 @@ export default async function BuyerOrdersPage({
                               : order.returnStatus === "in_transit"
                                 ? "The return package is on its way back to the seller."
                                 : order.returnStatus === "received"
-                                  ? "The seller has received the return package. Refund or dispute review is the next step."
+                                  ? "The seller has received the return package. Check your return details for refund and inspection status."
                               : order.returnStatus === "approved"
-                                ? "Create the return label when you are ready to ship the item back."
+                                ? "Pay for your return label and hand the package to the carrier within 5 calendar days."
                                 : "The seller needs to confirm the return before a label can be created."}
                           </p>
                           <p className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm leading-6 text-amber-950">

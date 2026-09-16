@@ -1,11 +1,13 @@
 import Stripe from "stripe";
 import { sendOrderPurchasedNotifications } from "@/lib/notifications";
 import { getStripe } from "@/lib/stripe";
+import { fulfillReturnLabel, processReturn } from "@/lib/returns";
+import { deliverReturnNotifications } from "@/lib/return-notifications";
+import { requirePool } from "@/lib/store";
 import {
   findListingById,
   findUserById,
   listOrdersByStripeCheckoutSessionId,
-  markListingSold,
   markOrderFailedBySessionId,
   markOrderPaidBySessionId
 } from "@/lib/store";
@@ -33,7 +35,13 @@ export async function POST(request: Request) {
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"
   ) {
-    const session = event.data.object as Stripe.Checkout.Session;
+    const session = await stripe.checkout.sessions.retrieve((event.data.object as Stripe.Checkout.Session).id);
+    if (session.metadata?.kind === "return_label") {
+      await fulfillReturnLabel(session);
+      await deliverReturnNotifications();
+      return Response.json({ received: true });
+    }
+    if (session.payment_status !== "paid") return Response.json({ received: true });
     const orders = await listOrdersByStripeCheckoutSessionId(session.id);
 
     if (orders.length > 0) {
@@ -45,9 +53,6 @@ export async function POST(request: Request) {
         orders.map(async (order) => {
           const listing = await findListingById(order.listingId);
           const [buyer, seller] = await Promise.all([findUserById(order.buyerId), findUserById(order.sellerId)]);
-          if (listing?.status === "active") {
-            await markListingSold(order.listingId);
-          }
           if (buyer && seller) {
             await sendOrderPurchasedNotifications({
               order,
@@ -65,6 +70,19 @@ export async function POST(request: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
     await markOrderFailedBySessionId(session.id);
   }
+
+  if (["refund.created", "refund.updated", "refund.failed"].includes(event.type)) {
+    const refund = event.data.object as Stripe.Refund;
+    const orderId = refund.metadata?.tailorgraphReturn;
+    if (orderId) await processReturn(orderId);
+  }
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (session.metadata?.kind === "return_label") {
+      await requirePool().query("UPDATE return_label_payments SET status='expired' WHERE stripe_session_id=$1 AND status='quoted'", [session.id]);
+    }
+  }
+  await deliverReturnNotifications();
 
   return Response.json({ received: true });
 }

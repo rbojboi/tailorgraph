@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/auth";
 import { formatCurrency } from "@/lib/display";
 import { createShippoReturnShipmentQuote, isShippoConfigured } from "@/lib/shippo";
 import { ensureSeedData, findListingById, findOrderById, findUserById } from "@/lib/store";
+import { getReturn, getReturnLabelPayment, saveReturnQuote } from "@/lib/returns";
+import { RETURN_POLICY_TEXT } from "@/lib/return-policy";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -36,6 +38,12 @@ export default async function BuyerReturnShippoRatesPage({
 
   if (!order || order.buyerId !== user.id) {
     redirect("/buyer/orders?authError=Order+not+found");
+  }
+  const ret = await getReturn(orderId);
+  const payment = await getReturnLabelPayment(orderId);
+  if (!ret || ret.accepted_at || ret.closed_at || new Date().getTime() >= ret.ship_by.getTime() ||
+    (payment && !["quoted", "expired", "quote_expired"].includes(payment.status))) {
+    redirect(`/buyer/orders/${orderId}/return`);
   }
 
   if (!order.returnsAccepted) {
@@ -68,6 +76,7 @@ export default async function BuyerReturnShippoRatesPage({
       buyer: user,
       seller
     });
+    await saveReturnQuote(orderId, quote);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Shippo could not return rates for this return.";
     redirect(`/buyer/orders?authError=${encodeURIComponent(message)}`);
@@ -106,12 +115,11 @@ export default async function BuyerReturnShippoRatesPage({
           </div>
 
           <div className="mt-6 rounded-2xl bg-amber-100 px-4 py-3 text-sm leading-6 text-amber-950">
-            If a carrier is not enabled in Shippo, choose another option for now. USPS is usually the safest test path
-            while UPS activation is still pending.
+            {RETURN_POLICY_TEXT}
           </div>
 
           <div className="mt-6 grid gap-4">
-            {quote.rates.map((rate) => (
+            {quote.rates.filter(rate => rate.currency?.toUpperCase() === "USD" && (rate.amount ?? 0) > 0).map((rate) => (
               <article key={rate.rateId} className="rounded-[1.5rem] border border-stone-300 bg-white p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
@@ -140,7 +148,7 @@ export default async function BuyerReturnShippoRatesPage({
                   <input type="hidden" name="rateAmount" value={rate.amount ?? ""} />
                   <input type="hidden" name="returnTo" value={`/buyer/orders/${order.id}/return/shippo`} />
                   <button className="rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white">
-                    Buy This Return Label
+                    Pay for Return Label
                   </button>
                 </form>
               </article>

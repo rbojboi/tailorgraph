@@ -956,16 +956,16 @@ export function SellerListingForm({
         <Select
           name="returnsAccepted"
           label="Return Policy"
-          defaultValue={listing?.returnPolicy ?? (listing?.returnsAccepted ? "seller_approval" : "no_returns")}
+          defaultValue={listing?.returnsAccepted ? "automatic_returns" : "no_returns"}
           required
           options={[
-            ["automatic_returns", "Automatic returns"],
-            ["seller_approval", "Returns with seller approval"],
+            ["automatic_returns", "Returns allowed — automatic refund on carrier acceptance"],
             ["no_returns", "No returns"]
           ]}
         />
 
       <div className="sm:col-span-2 flex flex-wrap gap-3">
+        <p className="w-full text-sm text-stone-700">Returns allowed: 7 calendar days to request, then 5 days to ship. Buyer pays return postage; original shipping is not refunded. TailorGraph returns its fee. No partial refunds. You have 48 hours after return delivery to report an issue.</p>
         <button
           type="submit"
           onClick={(event) => setSubmitIntent(listing ? listing.status : "publish", event.currentTarget.form)}

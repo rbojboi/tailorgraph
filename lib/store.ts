@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { RETURNS_SCHEMA } from "@/lib/returns-schema";
 import {
   CURRENT_SCHEMA_VERSION,
   getRuntimeSchemaDisabledMessage,
@@ -197,7 +198,7 @@ if (pool) {
   });
 }
 
-function requirePool() {
+export function requirePool() {
   if (!pool) {
     throw new Error("DATABASE_URL is required. Set it to your hosted Postgres connection string.");
   }
@@ -719,6 +720,7 @@ async function initSchema() {
   `);
 
   await client.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
+  await client.query(RETURNS_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -939,7 +941,7 @@ function mapListing(row: Record<string, unknown>): Listing {
     fabricWeave: (row.fabric_weave as Listing["fabricWeave"]) || "na",
     condition: row.condition as Listing["condition"],
     vintage: normalizeVintageEra(row.vintage),
-    returnsAccepted: Boolean(row.returns_accepted) || normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)) !== "no_returns",
+    returnsAccepted: normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)) !== "no_returns",
     returnPolicy: normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)),
     allowOffers: Boolean(row.allow_offers),
     price: Number(row.price),
@@ -990,8 +992,8 @@ function mapOrder(row: Record<string, unknown>): Order {
     paymentMethod: row.payment_method as Order["paymentMethod"],
     status: row.status as OrderStatus,
     listingStatus: row.listing_status ? (String(row.listing_status) as ListingStatus) : null,
-    returnsAccepted: Boolean(row.returns_accepted) || normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)) !== "no_returns",
-    returnPolicy: normalizeReturnPolicy(row.return_policy, Boolean(row.returns_accepted)),
+    returnsAccepted: normalizeReturnPolicy(row.return_policy, false) !== "no_returns",
+    returnPolicy: normalizeReturnPolicy(row.return_policy, false),
     stripeCheckoutSessionId: row.stripe_checkout_session_id
       ? String(row.stripe_checkout_session_id)
       : null,
@@ -2507,7 +2509,7 @@ export async function updateOrderReturnShippingWithProvider(
 
 export async function markOrderDelivered(orderId: string): Promise<void> {
   await ensureSchema();
-  await requirePool().query("UPDATE orders SET status = 'delivered', delivered_at = NOW() WHERE id = $1", [orderId]);
+  await requirePool().query("UPDATE orders SET status = 'delivered', delivered_at = COALESCE(delivered_at,NOW()) WHERE id = $1 AND status IN ('shipped','delivered') AND return_status IS NULL", [orderId]);
 }
 
 export async function updateOrderTrackingFromProvider(
@@ -2538,8 +2540,9 @@ export async function updateOrderTrackingFromProvider(
          tracking_status = COALESCE($4, tracking_status),
          shipping_eta = COALESCE($5::timestamptz, shipping_eta),
          status = CASE
+           WHEN status IN ('canceled', 'refunded', 'failed', 'issue_open') OR return_status IS NOT NULL THEN status
            WHEN $6 = 'delivered' THEN 'delivered'
-           WHEN $6 = 'shipped' AND status NOT IN ('delivered', 'canceled', 'refunded', 'failed') THEN 'shipped'
+           WHEN $6 = 'shipped' AND status <> 'delivered' THEN 'shipped'
            ELSE status
          END,
          delivered_at = CASE
@@ -2589,7 +2592,7 @@ export async function updateOrderReturnTrackingFromProvider(
          return_tracking_status = COALESCE($4, return_tracking_status),
          return_eta = COALESCE($5::timestamptz, return_eta),
          return_status = CASE
-           WHEN $6 = 'received' THEN 'received'
+           WHEN $6 = 'received' AND return_status IS DISTINCT FROM 'closed' THEN 'received'
            WHEN $6 = 'in_transit' AND return_status NOT IN ('received', 'closed') THEN 'in_transit'
            WHEN $6 = 'label_created' AND return_status IS NULL THEN 'label_created'
            ELSE return_status
@@ -2766,14 +2769,16 @@ export async function listOrdersByStripeCheckoutSessionId(sessionId: string): Pr
 export async function markOrderPaidBySessionId(sessionId: string, paymentIntentId: string | null): Promise<void> {
   await ensureSchema();
   await requirePool().query(
-    "UPDATE orders SET status = 'processing', payment_method = 'stripe_checkout', stripe_payment_intent_id = $1 WHERE stripe_checkout_session_id = $2",
+    `WITH paid AS (UPDATE orders SET status='processing', payment_method='stripe_checkout', stripe_payment_intent_id=$1
+      WHERE stripe_checkout_session_id=$2 AND status='pending_payment' RETURNING listing_id)
+      UPDATE listings SET status='sold' WHERE id IN (SELECT listing_id FROM paid) AND status IN ('active','reserved')`,
     [paymentIntentId, sessionId]
   );
 }
 
 export async function markOrderFailedBySessionId(sessionId: string): Promise<void> {
   await ensureSchema();
-  await requirePool().query("UPDATE orders SET status = 'failed' WHERE stripe_checkout_session_id = $1", [sessionId]);
+  await requirePool().query("UPDATE orders SET status = 'failed' WHERE stripe_checkout_session_id = $1 AND status='pending_payment'", [sessionId]);
 }
 
 export async function attachStripeSessionToOrder(orderId: string, sessionId: string): Promise<void> {
