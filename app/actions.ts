@@ -81,7 +81,7 @@ import {
   updateUserStripeAccount,
   sendMessageInThread
 } from "@/lib/store";
-import { saveListingMediaFiles } from "@/lib/media";
+import { resolveListingFormMedia, verifyWarningListingMedia } from "@/lib/listing-upload-server";
 import {
   EMAIL_SENDER_TEST_CATEGORIES,
   type EmailSenderCategory,
@@ -264,10 +264,6 @@ function serializeSellerListingDraft(formData: FormData): string {
 
 function parseSellerListingDraft(raw: string): SellerListingDraft {
   return JSON.parse(decodeURIComponent(raw)) as SellerListingDraft;
-}
-
-function parseSellerListingMedia(raw: string): ListingMedia[] {
-  return JSON.parse(decodeURIComponent(raw)) as ListingMedia[];
 }
 
 function sellerDraftStringValue(draft: SellerListingDraft, key: string) {
@@ -877,42 +873,6 @@ function isValidPublicLocationMode(value: string): value is PublicLocationMode {
 
 function isValidBuyerFitPreference(value: string): value is BuyerFitPreference {
   return ["trim", "classic", "relaxed"].includes(value);
-}
-
-function reorderFilesFromManifest(formData: FormData, files: File[]) {
-  const manifestValue = formData.get("mediaManifest");
-
-  if (typeof manifestValue !== "string" || !manifestValue.trim()) {
-    return files;
-  }
-
-  try {
-    const manifest = JSON.parse(manifestValue) as Array<{
-      name: string;
-      size: number;
-      type: string;
-      order: number;
-    }>;
-    const remaining = [...files];
-
-    return manifest
-      .sort((a, b) => a.order - b.order)
-      .map((entry) => {
-        const matchIndex = remaining.findIndex(
-          (file) => file.name === entry.name && file.size === entry.size && file.type === entry.type
-        );
-
-        if (matchIndex === -1) {
-          return null;
-        }
-
-        const [match] = remaining.splice(matchIndex, 1);
-        return match;
-      })
-      .filter((file): file is File => Boolean(file));
-  } catch {
-    return files;
-  }
 }
 
 function buildShippingAddress(formData: FormData): ShippingAddress {
@@ -2542,14 +2502,10 @@ export async function createListingAction(formData: FormData) {
     await redirectIfSellerPayoutsMissing(user, "/seller/listings/new");
   }
 
-  const mediaFiles = formData
-    .getAll("media")
-    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  const orderedMediaFiles = reorderFilesFromManifest(formData, mediaFiles);
-  let media = [] as Awaited<ReturnType<typeof saveListingMediaFiles>>;
+  let media: ListingMedia[] = [];
 
   try {
-    media = await saveListingMediaFiles(user.id || randomUUID(), orderedMediaFiles);
+    media = await resolveListingFormMedia(user.id, formData);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to upload listing media";
     redirect(`/seller/listings/new?authError=${encodeURIComponent(message)}`);
@@ -2572,7 +2528,7 @@ export async function createListingAction(formData: FormData) {
     | "sweater";
 
   if (listingStatus === "active") {
-    const validationError = validatePublishedListing(formData, category, orderedMediaFiles.length);
+    const validationError = validatePublishedListing(formData, category, media.length);
     if (validationError) {
       redirect(`/seller/listings/new?authError=${encodeURIComponent(validationError)}`);
     }
@@ -2804,19 +2760,14 @@ export async function updateListingAction(formData: FormData) {
     redirect("/seller?authError=Listing+not+found");
   }
 
-  const mediaFiles = formData
-    .getAll("media")
-    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  const orderedMediaFiles = reorderFilesFromManifest(formData, mediaFiles);
   let media = existingListing.media;
 
-  if (orderedMediaFiles.length) {
-    try {
-      media = await saveListingMediaFiles(user.id, orderedMediaFiles);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to upload listing media";
-      redirect(`/seller/listings/${listingId}/edit?authError=${encodeURIComponent(message)}`);
-    }
+  try {
+    const replacementMedia = await resolveListingFormMedia(user.id, formData);
+    if (replacementMedia.length) media = replacementMedia;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to verify listing media";
+    redirect(`/seller/listings/${listingId}/edit?authError=${encodeURIComponent(message)}`);
   }
 
   const sellerLocation = user.sellerLocation.trim();
@@ -3070,7 +3021,12 @@ export async function forceCreateListingAction(formData: FormData) {
   }
 
   const draft = parseSellerListingDraft(stringValue(formData, "sellerListingDraft"));
-  const media = parseSellerListingMedia(stringValue(formData, "sellerListingMedia"));
+  let media: ListingMedia[];
+  try {
+    media = await verifyWarningListingMedia(user.id, stringValue(formData, "sellerListingMedia"));
+  } catch {
+    redirect("/seller/listings/new?authError=Unable+to+verify+photos.+Please+re-select+them.");
+  }
   const listingStatus = listingStatusFromIntent(sellerDraftStringValue(draft, "listingIntent"));
 
   if (listingStatus === "active") {
@@ -3123,7 +3079,12 @@ export async function forceUpdateListingAction(formData: FormData) {
   }
 
   const draft = parseSellerListingDraft(stringValue(formData, "sellerListingDraft"));
-  const media = parseSellerListingMedia(stringValue(formData, "sellerListingMedia"));
+  let media: ListingMedia[];
+  try {
+    media = await verifyWarningListingMedia(user.id, stringValue(formData, "sellerListingMedia"), existingListing.media);
+  } catch {
+    redirect(`/seller/listings/${listingId}/edit?authError=Unable+to+verify+photos.+Please+re-select+them.`);
+  }
   const { input } = buildListingPayloadFromDraft(draft, media, sellerLocation, existingListing.status);
 
   await updateListing(listingId, {

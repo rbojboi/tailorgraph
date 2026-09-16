@@ -75,6 +75,7 @@ export default async function EditSellerListingPage({ params, searchParams }: Pa
             description="Adjust the listing information here. Existing media is preserved unless you upload replacement files."
           />
           <SellerListingForm
+            sellerId={user.id}
             action={updateListingAction}
             listing={listing}
             sanityCheck={measurementWarnings}

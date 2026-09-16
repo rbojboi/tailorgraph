@@ -251,6 +251,7 @@ function shouldShowTrousers(category: string) {
 }
 
 export function SellerListingForm({
+  sellerId,
   action,
   listing,
   sanityCheck,
@@ -261,6 +262,7 @@ export function SellerListingForm({
   submitLabel = "Publish Listing",
   showDraftButton = true
 }: {
+  sellerId: string;
   action: (formData: FormData) => void | Promise<void>;
   listing?: Listing;
   sanityCheck?: BuyerBodyMeasurementSanityCheckResult | null;
@@ -325,7 +327,7 @@ export function SellerListingForm({
     <form action={action} noValidate className="mt-5 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
       {listing ? <input type="hidden" name="listingId" value={listing.id} /> : null}
       <input type="hidden" name="listingIntent" value={listingIntent} readOnly />
-      <ListingMediaInput required={!listing} existingMedia={listing?.media ?? []} onProcessingChange={setMediaProcessing} />
+      <ListingMediaInput sellerId={sellerId} required={!listing} existingMedia={listing?.media ?? []} onProcessingChange={setMediaProcessing} />
       <Input
         name="title"
         label="Title (max. 60 characters)"
@@ -974,7 +976,7 @@ export function SellerListingForm({
           disabled={mediaProcessing}
           className="rounded-full bg-stone-950 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
         >
-          {mediaProcessing ? "Preparing photos…" : submitLabel}
+          {mediaProcessing ? "Finish photo uploads to save" : submitLabel}
         </button>
         {showDraftButton ? (
           <button

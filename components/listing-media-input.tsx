@@ -3,23 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isHeifPhoto } from "@/lib/listing-photo-format";
 import { prepareListingPhoto } from "@/lib/listing-photo";
+import { MAX_LISTING_PHOTOS, validatePhotoSize } from "@/lib/listing-upload-policy";
+import { uploadPendingPhotos, type QueuedListingPhoto } from "@/lib/listing-upload-queue";
 import type { ListingMedia } from "@/lib/types";
 
-type MediaItem = {
-  id: string;
-  file: File;
-  previewUrl: string;
-};
+type MediaItem = QueuedListingPhoto;
 
 function buildId(file: File) {
   return `${file.name}-${file.size}-${file.type}`;
 }
 
 export function ListingMediaInput({
+  sellerId,
   required = true,
   existingMedia = [],
   onProcessingChange
 }: {
+  sellerId: string;
   required?: boolean;
   existingMedia?: ListingMedia[];
   onProcessingChange?: (processing: boolean) => void;
@@ -28,6 +28,7 @@ export function ListingMediaInput({
   const itemsRef = useRef<MediaItem[]>([]);
   const processingRef = useRef(false);
   const mountedRef = useRef(false);
+  const uploadAbortRef = useRef<AbortController | null>(null);
   const [items, setItems] = useState<MediaItem[]>([]);
   const [processing, setProcessing] = useState(false);
   const [progress, setProgress] = useState("");
@@ -40,7 +41,7 @@ export function ListingMediaInput({
     const form = inputRef.current?.form;
     // Also blocks Enter/requestSubmit before React has rendered disabled buttons.
     const guardSubmit = (event: SubmitEvent) => {
-      if (processingRef.current) {
+      if (processingRef.current || itemsRef.current.some((item) => !item.uploaded)) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
@@ -48,6 +49,7 @@ export function ListingMediaInput({
     form?.addEventListener("submit", guardSubmit, true);
     return () => {
       mountedRef.current = false;
+      uploadAbortRef.current?.abort();
       form?.removeEventListener("submit", guardSubmit, true);
       itemsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     };
@@ -56,44 +58,48 @@ export function ListingMediaInput({
   const manifest = useMemo(
     () =>
       JSON.stringify(
-        items.map((item, index) => ({
-          id: item.id,
-          name: item.file.name,
-          size: item.file.size,
-          type: item.file.type,
-          order: index
-        }))
+        items.flatMap((item) => item.uploaded ? [item.uploaded] : [])
       ),
     [items]
   );
 
-  function syncInputFiles(nextItems: MediaItem[]) {
-    if (!inputRef.current) {
-      return;
-    }
-
-    const transfer = new DataTransfer();
-    for (const item of nextItems) {
-      transfer.items.add(item.file);
-    }
-    inputRef.current.files = transfer.files;
-  }
-
   function commitItems(nextItems: MediaItem[]) {
-    syncInputFiles(nextItems);
     itemsRef.current = nextItems;
     setItems(nextItems);
+    onProcessingChange?.(processingRef.current || nextItems.some((item) => !item.uploaded));
+  }
+
+  function finishProcessing() {
+    processingRef.current = false;
+    setProcessing(false);
+    onProcessingChange?.(itemsRef.current.some((item) => !item.uploaded));
+  }
+
+  async function uploadQueuedPhotos() {
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
+    await uploadPendingPhotos(sellerId, itemsRef.current, commitItems, setProgress, controller.signal);
+    if (mountedRef.current) {
+      const failed = itemsRef.current.filter((item) => !item.uploaded).length;
+      setProgress(failed ? `${failed} photo(s) need a retry or removal before saving.` : "All photos uploaded. Ready to save your listing.");
+    }
+  }
+
+  async function retryUploads() {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setProcessing(true);
+    onProcessingChange?.(true);
+    try { await uploadQueuedPhotos(); }
+    finally { if (mountedRef.current) finishProcessing(); }
   }
 
   async function appendFiles(fileList: FileList | null) {
     if (!fileList) return;
-    if (processingRef.current) {
-      syncInputFiles(itemsRef.current);
-      return;
-    }
+    if (processingRef.current) return;
     const files = Array.from(fileList);
-    // Never leave raw HEIF files in the submitted input, including on failure.
-    syncInputFiles(itemsRef.current);
+    // This picker deliberately has no name: photo bytes never enter FormData.
+    if (inputRef.current) inputRef.current.value = "";
     if (!files.length) return;
     const seen = new Set(itemsRef.current.map((item) => item.id));
     const additions = files.filter((file) => {
@@ -104,7 +110,7 @@ export function ListingMediaInput({
     });
     setError("");
     setProgress("");
-    if (itemsRef.current.length + additions.length > 20) {
+    if (itemsRef.current.length + additions.length > MAX_LISTING_PHOTOS) {
       setError("Upload up to 20 photos per listing. Remove a photo or choose fewer files.");
       return;
     }
@@ -118,15 +124,17 @@ export function ListingMediaInput({
       // Decode one at a time to limit memory use on phones. Commit the whole
       // selection only after every photo succeeds, preserving previous photos.
       for (const [index, source] of additions.entries()) {
+        validatePhotoSize(source.size);
         setProgress(`${isHeifPhoto(source) ? "Converting to JPG" : "Preparing photo"} ${index + 1} of ${additions.length}…`);
         const file = await prepareListingPhoto(source);
+        validatePhotoSize(file.size);
         if (!mountedRef.current) return;
         prepared.push({ id: buildId(source), file });
       }
       commitItems([...itemsRef.current, ...prepared.map((item) => ({
         ...item, previewUrl: URL.createObjectURL(item.file)
       }))]);
-      setProgress("Photos ready. HEIC and HEIF photos have been converted to JPG.");
+      await uploadQueuedPhotos();
     } catch (cause) {
       if (mountedRef.current) {
         setProgress("");
@@ -134,9 +142,7 @@ export function ListingMediaInput({
       }
     } finally {
       if (mountedRef.current) {
-        processingRef.current = false;
-        setProcessing(false);
-        onProcessingChange?.(false);
+        finishProcessing();
       }
     }
   }
@@ -146,6 +152,9 @@ export function ListingMediaInput({
     const removed = itemsRef.current.find((item) => item.id === id);
     commitItems(itemsRef.current.filter((item) => item.id !== id));
     if (removed) URL.revokeObjectURL(removed.previewUrl);
+    const remaining = itemsRef.current;
+    setProgress(!remaining.length ? "" : remaining.every((item) => item.uploaded)
+      ? "All photos uploaded. Ready to save your listing." : "Retry or remove unfinished photos before saving.");
   }
 
   function moveItem(id: string, direction: -1 | 1) {
@@ -197,17 +206,15 @@ export function ListingMediaInput({
       >
         <p className="text-sm font-medium text-stone-900">
           Drag or browse up to 20 JPG, PNG, HEIC, or HEIF files. Reorder before publishing to control buyer-facing order.
-          {" HEIC and HEIF photos (up to 25 MB each) are automatically converted to JPG before upload."}
+          {" Each photo can be up to 25 MB. HEIC and HEIF photos are automatically converted to JPG. Photos upload directly to storage as you select them; keep this page open until they finish."}
           {!required && existingMedia.length ? " Leave empty to keep current media." : ""}
         </p>
         <input
           ref={inputRef}
-          name="media"
           type="file"
           multiple
           disabled={processing}
           aria-label="Listing photos"
-          required={required && items.length === 0 && existingMedia.length === 0}
           accept=".jpg,.jpeg,.png,.heic,.heif,image/jpeg,image/png,image/heic,image/heif"
           onChange={(event) => appendFiles(event.target.files)}
           className="sr-only"
@@ -234,7 +241,19 @@ export function ListingMediaInput({
       <p role="status" aria-live="polite" className="mt-3 text-sm text-stone-700">{progress}</p>
       {error ? <p role="alert" className="mt-3 text-sm text-rose-700">{error}</p> : null}
 
-      <input type="hidden" name="mediaManifest" value={manifest} />
+      {processing && items.some((item) => !item.uploaded) ? (
+        <button type="button" onClick={() => uploadAbortRef.current?.abort()} className="mt-3 min-h-11 rounded-full border border-stone-400 px-4 py-2 text-sm font-semibold">
+          Pause uploads
+        </button>
+      ) : null}
+
+      {!processing && items.some((item) => !item.uploaded) ? (
+        <button type="button" onClick={retryUploads} className="mt-3 min-h-11 rounded-full border border-stone-400 px-4 py-2 text-sm font-semibold">
+          Retry failed uploads
+        </button>
+      ) : null}
+
+      <input type="hidden" name="uploadedMedia" value={manifest} />
 
       {existingMedia.length ? (
         <div className="mt-5">
@@ -305,6 +324,9 @@ export function ListingMediaInput({
                 <p className="mt-1 text-xs text-stone-600">
                   Image - {(item.file.size / 1024 / 1024).toFixed(1)} MB
                 </p>
+                <p className={`mt-2 text-sm ${item.error ? "text-rose-700" : "text-stone-700"}`}>
+                  {item.uploaded ? "Uploaded" : item.error || (processing ? `Uploading ${item.percentage ?? 0}%` : "Not uploaded — retry or remove")}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -336,7 +358,7 @@ export function ListingMediaInput({
           </div>
 
           <div className="mt-5 rounded-[1.25rem] bg-stone-50 p-4">
-            <p className="text-sm font-semibold text-stone-950">Files queued for this listing</p>
+            <p className="text-sm font-semibold text-stone-950">Photos for this listing</p>
             <div className="mt-3 grid gap-2">
               {items.map((item, index) => (
                 <p key={item.id} className="text-sm text-stone-700">

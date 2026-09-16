@@ -2,13 +2,11 @@ import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { cookies } from "next/headers";
 import type { User } from "@/lib/types";
 import { findUserById } from "@/lib/store";
+import { sessionCookieDomain } from "@/lib/session-cookie-domain";
 
 const SESSION_COOKIE = "suit_session";
 const SESSION_SECRET = process.env.SESSION_SECRET || "suit-yourself-local-secret";
-const COOKIE_DOMAIN =
-  process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_APP_URL?.includes("tailorgraph.com")
-    ? ".tailorgraph.com"
-    : undefined;
+const COOKIE_DOMAIN = sessionCookieDomain(process.env.NODE_ENV, process.env.VERCEL_ENV, process.env.NEXT_PUBLIC_APP_URL);
 
 function sign(value: string) {
   return createHmac("sha256", SESSION_SECRET).update(value).digest("hex");
