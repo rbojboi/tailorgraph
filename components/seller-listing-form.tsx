@@ -959,7 +959,7 @@ export function SellerListingForm({
           defaultValue={listing?.returnsAccepted ? "automatic_returns" : "no_returns"}
           required
           options={[
-            ["automatic_returns", "Returns allowed — automatic refund on carrier acceptance"],
+            ["automatic_returns", "Returns allowed"],
             ["no_returns", "No returns"]
           ]}
         />

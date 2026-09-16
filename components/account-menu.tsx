@@ -56,7 +56,7 @@ export function AccountMenu({ signedIn, username }: { signedIn: boolean; usernam
     <div ref={containerRef} className="relative z-[120] shrink-0"
       onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}>
       <button ref={triggerRef} type="button" aria-label="Navigation and account menu"
-        aria-expanded={open} aria-controls={menuId} onClick={() => setOpen(!open)}
+        aria-expanded={open} aria-controls={menuId} onClick={() => setOpen((current) => !current)}
         className="inline-flex h-11 min-w-11 items-center justify-center rounded-full bg-stone-950 px-3 text-sm font-semibold text-stone-50 transition hover:bg-stone-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-800 md:px-4">
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 md:hidden" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
           {open ? <path d="m6 6 12 12M6 18 18 6" /> : <path d="M4 6h16M4 12h16M4 18h16" />}
@@ -64,7 +64,7 @@ export function AccountMenu({ signedIn, username }: { signedIn: boolean; usernam
         <span className="hidden max-w-40 truncate md:inline">{signedIn ? username || "Account" : "Log In"}</span>
       </button>
       {open ? (
-        <nav id={menuId} aria-label="Account navigation" className="absolute right-0 top-full z-[200] mt-2 max-h-[calc(100dvh-7rem)] w-[min(20rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-[1.25rem] border border-stone-300 bg-white p-2 shadow-lg"
+        <nav id={menuId} aria-label="Account navigation" className="absolute right-0 top-full z-[200] mt-2 max-h-[calc(100dvh-7rem)] w-[min(20rem,calc(100vw-3rem))] overflow-y-auto overscroll-contain rounded-[1.25rem] border border-stone-300 bg-white p-2 shadow-lg"
           onClick={(event) => { if (event.target instanceof Element && event.target.closest("a")) setOpen(false); }}>
           <div className="border-b border-stone-200 pb-2 md:hidden">
             <Link href="/marketplace" className={linkClass}>Marketplace</Link>
