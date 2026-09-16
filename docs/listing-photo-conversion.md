@@ -45,8 +45,6 @@ Library notices: `/third-party/heic-to-NOTICE.txt` and
 ## Separate existing limitations
 
 This does not recover missing legacy `/uploads/...` files or convert historical
-media. It also does not replace the existing multipart Server Action upload
-transport: Vercel's total function request-size limit still applies to the batch,
-even though Next.js is configured for 25 MB. Larger photo batches need a separate
-direct-to-Blob upload change. No database migration or environment changes are
-required for this feature.
+media. The subsequent [direct photo upload change](direct-photo-uploads.md) replaces
+the multipart Server Action transport with direct-to-Blob multipart uploads.
+No database migration or additional environment variables are required.

@@ -83,6 +83,7 @@ export default async function NewSellerListingPage({ searchParams }: PageProps) 
             description="Create a structured listing here, then publish it when everything looks right."
           />
           <SellerListingForm
+            sellerId={user.id}
             action={createListingAction}
             sanityCheck={measurementWarnings}
             warningDraft={sellerListingDraft}
