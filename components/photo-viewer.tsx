@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { ListingImage } from "@/components/listing-image";
+import { PhotoNavigationButton } from "@/components/photo-navigation-button";
 import { clampPhotoTransform, INITIAL_PHOTO_TRANSFORM, photoSwipe, pinchPhotoTransform, wrapPhotoIndex, type PhotoTransform, type Point } from "@/lib/photo-viewer";
 import type { ListingMedia } from "@/lib/types";
 
@@ -158,14 +159,14 @@ export default function PhotoViewer({ media, title, index, onIndexChange, onClos
         <div className="min-h-0 flex-1"><video key={active.url} src={active.url} controls preload="metadata" className="h-full w-full object-contain" /></div>
       )}
       <footer className="flex shrink-0 items-center gap-2 border-t border-white/10 px-3 py-3 sm:px-6">
-        {media.length > 1 ? <button type="button" aria-label="Previous photo" className={controlClass} onClick={() => move(-1)}>‹</button> : null}
+        {media.length > 1 ? <PhotoNavigationButton direction="previous" label="Previous photo" dark onClick={() => move(-1)} /> : null}
         <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto p-1" aria-label="Viewer photo thumbnails">
           {media.map((item, photoIndex) => <button key={`${item.url}-${photoIndex}`} type="button" aria-label={`Go to photo ${photoIndex + 1}`} aria-pressed={index === photoIndex}
             onClick={() => onIndexChange(photoIndex)} className={`h-12 w-12 shrink-0 overflow-hidden rounded-lg border-2 bg-stone-800 ${index === photoIndex ? "border-white" : "border-transparent opacity-65 hover:opacity-100"}`}>
             {item.kind === "image" ? <ListingImage src={item.url} alt="" sizes="48px" className="h-full w-full object-contain" /> : <span className="text-xs">Video</span>}
           </button>)}
         </div>
-        {media.length > 1 ? <button type="button" aria-label="Next photo" className={controlClass} onClick={() => move(1)}>›</button> : null}
+        {media.length > 1 ? <PhotoNavigationButton direction="next" label="Next photo" dark onClick={() => move(1)} /> : null}
       </footer>
     </div>
   </dialog>, document.body);

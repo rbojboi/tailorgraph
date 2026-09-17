@@ -3,11 +3,12 @@
 import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import { ListingImage } from "@/components/listing-image";
+import { PhotoNavigationButton } from "@/components/photo-navigation-button";
 import { photoSwipe, wrapPhotoIndex, type Point } from "@/lib/photo-viewer";
 import type { ListingMedia } from "@/lib/types";
 
 const PhotoViewer = dynamic(() => import("@/components/photo-viewer"), { ssr: false });
-const arrowClass = "absolute top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-stone-200 bg-white/95 text-2xl text-stone-900 shadow-sm hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-950";
+const arrowClass = "absolute top-1/2 z-10 -translate-y-1/2";
 
 export function ListingGallery({ media, title, variant = "detail", sizes = "(max-width: 1023px) calc(100vw - 48px), 640px" }: {
   media: ListingMedia[]; title: string; variant?: "card" | "detail"; sizes?: string;
@@ -52,8 +53,8 @@ export function ListingGallery({ media, title, variant = "detail", sizes = "(max
         </button>
       )}
       {media.length > 1 ? <>
-        <button type="button" onClick={() => move(-1)} aria-label={`Previous photo of ${title}`} className={`${arrowClass} left-2`}>‹</button>
-        <button type="button" onClick={() => move(1)} aria-label={`Next photo of ${title}`} className={`${arrowClass} right-2`}>›</button>
+        <PhotoNavigationButton direction="previous" onClick={() => move(-1)} label={`Previous photo of ${title}`} className={`${arrowClass} left-2`} />
+        <PhotoNavigationButton direction="next" onClick={() => move(1)} label={`Next photo of ${title}`} className={`${arrowClass} right-2`} />
       </> : null}
       {active ? <div className="pointer-events-none absolute inset-x-3 bottom-3 flex items-center justify-between gap-2">
         <span role="status" aria-live="polite" aria-atomic="true" className="rounded-full bg-stone-950/80 px-3 py-1.5 text-xs font-medium text-white">{index + 1} / {media.length}</span>
