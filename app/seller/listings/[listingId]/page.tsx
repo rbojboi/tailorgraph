@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AppShell, PageWrap, SectionTitle, Spec } from "@/components/ui";
@@ -94,8 +95,8 @@ export default async function SellerListingPage({ params, searchParams }: PagePr
                     {media.kind === "video" ? (
                       <video src={media.url} controls className="h-72 w-full object-cover" />
                     ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={media.url} alt={media.originalName} className="h-72 w-full object-cover" />
+
+                      <ListingImage sizes="(max-width: 639px) calc(100vw - 48px), 50vw" src={media.url} alt={media.originalName} className="h-72 w-full object-cover" />
                     )}
                   </div>
                 ))

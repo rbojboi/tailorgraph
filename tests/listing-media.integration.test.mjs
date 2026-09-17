@@ -21,7 +21,8 @@ afterEach(() => {
 
 test("converted HEIF is stored as JPEG with correct bytes, filename and Blob content type", async () => {
   const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
-  const converted = await prepareListingPhoto(new File(["heif"], "shirt.HEIF"), async () => new Blob([bytes], { type: "image/jpeg" }));
+  // Browser canvas processing is verified separately; isolate storage metadata here.
+  const converted = await prepareListingPhoto(new File(["heif"], "shirt.HEIF"), async () => new Blob([bytes], { type: "image/jpeg" }), async (file) => file);
   const [media] = await saveListingMediaFiles("seller-test", [converted]);
   assert.equal(uploads.length, 1);
   assert.match(uploads[0].path, /^listings\/seller-test\/.*-shirt\.jpg$/);

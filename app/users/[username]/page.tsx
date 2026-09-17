@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { addToCartAction, buyNowAction, toggleFollowUserAction, toggleSaveListingAction } from "@/app/actions";
@@ -578,8 +579,8 @@ export default async function UserProfilePage({
                                 heroMedia.kind === "video" ? (
                                   <video src={heroMedia.url} controls className="h-full w-full object-cover" />
                                 ) : (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img src={heroMedia.url} alt={listing.title} className="h-full w-full object-cover" />
+
+                                  <ListingImage sizes="(max-width: 639px) calc(100vw - 64px), (max-width: 1023px) 45vw, 384px" src={heroMedia.url} alt={listing.title} className="h-full w-full object-cover" />
                                 )
                               ) : (
                                 <div className="flex h-full items-center justify-center text-sm text-stone-500">Media will appear here</div>

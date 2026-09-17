@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -446,8 +447,8 @@ export default async function SellerOrderFulfillmentPage({
                 <div className="flex gap-4">
                   <div className="h-24 w-24 shrink-0 overflow-hidden rounded-[1rem] bg-stone-100">
                     {listing?.media[0]?.kind === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
+
+                      <ListingImage sizes="96px"
                         src={listing.media[0].url}
                         alt={order.listingTitle}
                         className="h-full w-full object-cover"

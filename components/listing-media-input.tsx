@@ -1,5 +1,7 @@
 "use client";
 
+import { ListingImage } from "@/components/listing-image";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isHeifPhoto } from "@/lib/listing-photo-format";
 import { prepareListingPhoto } from "@/lib/listing-photo";
@@ -125,7 +127,7 @@ export function ListingMediaInput({
       // selection only after every photo succeeds, preserving previous photos.
       for (const [index, source] of additions.entries()) {
         validatePhotoSize(source.size);
-        setProgress(`${isHeifPhoto(source) ? "Converting to JPG" : "Preparing photo"} ${index + 1} of ${additions.length}…`);
+        setProgress(`${isHeifPhoto(source) ? "Converting to JPG" : "Optimizing photo"} ${index + 1} of ${additions.length}…`);
         const file = await prepareListingPhoto(source);
         validatePhotoSize(file.size);
         if (!mountedRef.current) return;
@@ -206,7 +208,7 @@ export function ListingMediaInput({
       >
         <p className="text-sm font-medium text-stone-900">
           Drag or browse up to 20 JPG, PNG, HEIC, or HEIF files. Reorder before publishing to control buyer-facing order.
-          {" Each photo can be up to 25 MB. HEIC and HEIF photos are automatically converted to JPG. Photos upload directly to storage as you select them; keep this page open until they finish."}
+          {" Choose photos up to 25 MB each. Large photos are automatically resized for faster uploads while keeping detail. HEIC and HEIF photos are converted to JPG. Photos upload directly to storage as you select them; keep this page open until they finish."}
           {!required && existingMedia.length ? " Leave empty to keep current media." : ""}
         </p>
         <input
@@ -265,8 +267,8 @@ export function ListingMediaInput({
                   {media.kind === "video" ? (
                     <video src={media.url} className="h-36 w-full object-cover" controls />
                   ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={media.url} alt={media.originalName} className="h-36 w-full object-cover" />
+
+                    <ListingImage sizes="(max-width: 639px) calc(100vw - 96px), 280px" src={media.url} alt={media.originalName} className="h-36 w-full object-cover" />
                   )}
                 </div>
                 <p className="mt-3 text-xs uppercase tracking-[0.18em] text-stone-500">Current Position {index + 1}</p>

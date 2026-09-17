@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { addToCartAction, buyNowAction, toggleSaveListingAction } from "@/app/actions";
 import { formatDisplayValue, formatSizeLabel } from "@/lib/display";
@@ -18,8 +19,8 @@ export function BuyerListingCard({
       <div className="pointer-events-none relative z-10 overflow-hidden rounded-[1.25rem] bg-stone-100">
         <div className="aspect-[4/5] w-full">
           {listing.media[0] ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
+
+            <ListingImage sizes="(max-width: 639px) calc(100vw - 64px), (max-width: 1023px) 45vw, 384px" src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-stone-500">Media will appear here</div>
           )}
