@@ -20,5 +20,5 @@ function canOptimize(src: string) {
 
 export function ListingImage({ src, alt, className, sizes, loading = "lazy" }: ListingImageProps) {
   return <Image src={src} alt={alt} width={2400} height={2400} sizes={sizes}
-    className={className} loading={loading} quality={85} unoptimized={!canOptimize(src)} />;
+    className={className} loading={loading} quality={85} draggable={false} unoptimized={!canOptimize(src)} />;
 }

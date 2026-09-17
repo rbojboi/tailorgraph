@@ -1,4 +1,4 @@
-import { ListingImage } from "@/components/listing-image";
+import { ListingGallery } from "@/components/listing-gallery";
 import Link from "next/link";
 import {
   addToCartAction,
@@ -2053,23 +2053,12 @@ export default async function MarketplacePage({
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {listings.length ? (
                 listings.map((listing) => {
-                  const heroMedia = listing.media[0];
-
                   return (
                     <article key={listing.id} className="marketplace-card relative flex h-full flex-col rounded-[1.35rem] p-4">
                       <Link href={`/listings/${listing.id}`} className="absolute inset-0 rounded-[1.75rem]" aria-label={`View ${listing.title}`} />
                       <div className="pointer-events-none relative z-10 overflow-hidden rounded-[1rem] bg-stone-100 ring-1 ring-black/4">
                         <div className="aspect-[4/5] w-full">
-                          {heroMedia ? (
-                            heroMedia.kind === "video" ? (
-                              <video src={heroMedia.url} controls className="h-full w-full object-cover" />
-                            ) : (
-
-                              <ListingImage sizes="(max-width: 639px) calc(100vw - 64px), (max-width: 1023px) 45vw, 320px" src={heroMedia.url} alt={listing.title} className="h-full w-full object-cover" />
-                            )
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-sm text-stone-500">Media will appear here</div>
-                          )}
+                          <ListingGallery media={listing.media} title={listing.title} variant="card" sizes="(max-width: 767px) calc(100vw - 64px), (max-width: 1279px) 45vw, 320px" />
                         </div>
                         <div className="pointer-events-auto absolute right-3 top-3 z-20">
                           {user ? (
@@ -2230,4 +2219,3 @@ export default async function MarketplacePage({
     </AppShell>
   );
 }
-

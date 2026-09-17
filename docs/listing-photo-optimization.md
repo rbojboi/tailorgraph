@@ -29,7 +29,8 @@ images are not rewritten or deleted; there is no data migration.
 loading by default and WebP negotiation. Marketplace/account cards, cart and
 checkout photos, seller views, gallery thumbnails and existing upload previews
 request variants suited to their displayed size. The active gallery image loads
-eagerly. A full-size link opens the stored master when the buyer needs detail.
+eagerly. The [photo viewer](listing-photo-viewer.md) opens the stored master in
+an in-page gallery when the buyer needs detail.
 Local browser object-URL previews continue using a native image element.
 
 Only HTTPS public Vercel Blob `/listings/**` URLs with no query string or custom
