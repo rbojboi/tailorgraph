@@ -1,5 +1,7 @@
 "use client";
 
+import { ListingImage } from "@/components/listing-image";
+
 import { useState } from "react";
 import type { ListingMedia } from "@/lib/types";
 
@@ -29,8 +31,8 @@ export function ListingGallery({
             activeMedia.kind === "video" ? (
               <video src={activeMedia.url} controls className="h-full w-full object-cover" />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={activeMedia.url} alt={title} className="h-full w-full object-cover" />
+
+              <ListingImage sizes="(max-width: 1023px) calc(100vw - 48px), 640px" loading="eager" src={activeMedia.url} alt={title} className="h-full w-full object-cover" />
             )
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-stone-500">
@@ -61,6 +63,14 @@ export function ListingGallery({
         ) : null}
       </div>
 
+      {activeMedia?.kind === "image" ? (
+        <div className="bg-white px-4 py-2 text-right">
+          <a href={activeMedia.url} target="_blank" rel="noopener noreferrer" className="text-sm underline underline-offset-4">
+            View full-size photo<span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        </div>
+      ) : null}
+
       {media.length > 1 ? (
         <div className="flex flex-wrap gap-2 border-t border-stone-200 bg-white px-4 py-4">
           {media.map((item, index) => (
@@ -76,8 +86,8 @@ export function ListingGallery({
               {item.kind === "video" ? (
                 <video src={item.url} className="h-16 w-16 object-cover" />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.url} alt={item.originalName} className="h-16 w-16 object-cover" />
+
+                <ListingImage sizes="64px" src={item.url} alt={item.originalName} className="h-16 w-16 object-cover" />
               )}
             </button>
           ))}

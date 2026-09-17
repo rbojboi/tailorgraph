@@ -1,4 +1,5 @@
 import { isHeifPhoto } from "@/lib/listing-photo-format";
+import { resizeListingPhoto } from "@/lib/listing-photo-resize";
 
 export const MAX_HEIF_BYTES = 25 * 1024 * 1024;
 export const HEIF_CONVERSION_TIMEOUT_MS = 60_000;
@@ -11,6 +12,14 @@ async function convertHeifToJpeg(file: File): Promise<Blob> {
 }
 
 export async function prepareListingPhoto(
+  file: File,
+  convert: JpegConverter = convertHeifToJpeg,
+  resize: (file: File) => Promise<File> = resizeListingPhoto
+): Promise<File> {
+  return resize(await normalizeListingPhoto(file, convert));
+}
+
+async function normalizeListingPhoto(
   file: File,
   convert: JpegConverter = convertHeifToJpeg
 ): Promise<File> {

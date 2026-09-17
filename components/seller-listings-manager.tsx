@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import {
   buyShippoLabelAction,
@@ -79,8 +80,8 @@ function renderListingEntry(entry: Extract<InventoryEntry, { kind: "listing" }>)
             <div className="flex items-center gap-4">
               <div className="h-24 w-24 overflow-hidden rounded-[1rem] bg-stone-100">
                 {listing.media[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover" />
+
+                  <ListingImage sizes="96px" src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-stone-500">No Media</div>
                 )}

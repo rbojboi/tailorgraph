@@ -8,8 +8,10 @@ This removes Vercel Functions' 4.5 MB request cap from the photo transport.
 ## Seller experience
 
 - Up to 20 photos, each at most 25 MiB (before and after HEIC conversion).
-- JPEG/PNG files retain their image quality; HEIC/HEIF conversion is unchanged.
-- Conversion runs before upload. Photos upload automatically on selection.
+- Photos are resized to at most 2,400 pixels on the longest edge before upload;
+  JPEGs use quality 0.88 and PNGs preserve transparency. HEIC/HEIF conversion runs
+  first. See `listing-photo-optimization.md` for details and verification.
+- Conversion/optimization runs before upload. Photos upload automatically on selection.
 - One photo uploads at a time, with percentage progress. The Blob SDK retries
   failed multipart chunks. Pause stops the current request and remaining queue.
 - Failed/paused photos stay visible. Retry sends only unfinished photos; already

@@ -1,3 +1,4 @@
+import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { removeFromCartAction } from "@/app/actions";
 import { getCurrentUser } from "@/lib/auth";
@@ -175,8 +176,8 @@ export default async function CartPage({
                                   listing.media[0].kind === "video" ? (
                                     <video src={listing.media[0].url} className="h-full w-full object-cover" />
                                   ) : (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover" />
+
+                                    <ListingImage sizes="112px" src={listing.media[0].url} alt={listing.title} className="h-full w-full object-cover" />
                                   )
                                 ) : (
                                   <div className="flex h-full items-center justify-center px-2 text-center text-xs text-stone-500">

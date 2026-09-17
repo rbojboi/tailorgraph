@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { isHeifPhoto } from "@/lib/listing-photo-format";
-import { HEIF_CONVERSION_TIMEOUT_MS, MAX_HEIF_BYTES, prepareListingPhoto } from "@/lib/listing-photo";
+import { HEIF_CONVERSION_TIMEOUT_MS, MAX_HEIF_BYTES, prepareListingPhoto as prepareWithResize } from "@/lib/listing-photo";
+
+const prepareListingPhoto = (file: File, convert: (file: File) => Promise<Blob>) => prepareWithResize(file, convert, async (normalized) => normalized);
 
 const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 1]);
 const jpeg = () => new Blob([jpegBytes], { type: "image/jpeg" });
@@ -71,4 +73,23 @@ test("a stalled decoder times out so the seller is not stuck indefinitely", asyn
   const rejection = assert.rejects(conversion, /we couldn't convert/);
   context.mock.timers.tick(HEIF_CONVERSION_TIMEOUT_MS);
   await rejection;
+});
+
+test("all accepted photo formats reach the optimizer after conversion/normalization", async () => {
+  for (const [name, type] of [["photo.heic", "image/heic"], ["photo.jpg", "image/jpeg"], ["photo.png", "image/png"], ["photo.PNG", ""]]) {
+    const source = new File(["source"], name, { type });
+    const optimized = new File(["optimized"], "result.jpg", { type: "image/jpeg" });
+    let calls = 0;
+    assert.equal(await prepareWithResize(source, async () => jpeg(), async (input) => {
+      calls++;
+      assert.ok(["image/jpeg", "image/png"].includes(input.type));
+      return optimized;
+    }), optimized);
+    assert.equal(calls, 1);
+  }
+});
+
+test("optimization failure rejects the selection rather than uploading the large original", async () => {
+  await assert.rejects(prepareWithResize(new File(["photo"], "photo.jpg", { type: "image/jpeg" }), unexpectedConversion,
+    async () => { throw new Error("Image processing failed"); }), /Image processing failed/);
 });
