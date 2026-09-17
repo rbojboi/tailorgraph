@@ -1,4 +1,4 @@
-import { ListingImage } from "@/components/listing-image";
+import { ListingGallery } from "@/components/listing-gallery";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { addToCartAction, buyNowAction, toggleFollowUserAction, toggleSaveListingAction } from "@/app/actions";
@@ -568,23 +568,12 @@ export default async function UserProfilePage({
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {paginatedListings.length ? (
                     paginatedListings.map((listing) => {
-                      const heroMedia = listing.media[0];
-
                       return (
                         <article key={listing.id} className="panel relative flex h-full flex-col rounded-[1.75rem] p-4">
                           <Link href={`/listings/${listing.id}?from=profile&username=${user.username}`} className="absolute inset-0 rounded-[1.75rem]" aria-label={`View ${listing.title}`} />
                           <div className="pointer-events-none relative z-10 overflow-hidden rounded-[1.25rem] bg-stone-100">
                             <div className="aspect-[4/5] w-full">
-                              {heroMedia ? (
-                                heroMedia.kind === "video" ? (
-                                  <video src={heroMedia.url} controls className="h-full w-full object-cover" />
-                                ) : (
-
-                                  <ListingImage sizes="(max-width: 639px) calc(100vw - 64px), (max-width: 1023px) 45vw, 384px" src={heroMedia.url} alt={listing.title} className="h-full w-full object-cover" />
-                                )
-                              ) : (
-                                <div className="flex h-full items-center justify-center text-sm text-stone-500">Media will appear here</div>
-                              )}
+                              <ListingGallery media={listing.media} title={listing.title} variant="card" sizes="(max-width: 767px) calc(100vw - 64px), (max-width: 1279px) 45vw, 384px" />
                             </div>
                             <div className="pointer-events-auto absolute right-3 top-3 z-20">
                               {viewer ? (
