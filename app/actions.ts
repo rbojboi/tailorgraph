@@ -86,6 +86,7 @@ import {
   EMAIL_SENDER_TEST_CATEGORIES,
   type EmailSenderCategory,
   sendDirectMessageNotification,
+  sendOfferReceivedNotification,
   sendEmailVerificationNotification,
   sendBuyerReturnLabelNotification,
   sendNewListingFollowerNotification,
@@ -4161,7 +4162,7 @@ export async function makeOfferAction(formData: FormData) {
     redirect(`/listings/${listing.id}?intent=offer&authError=${encodeURIComponent(bodyError)}`);
   }
 
-  await createOffer({
+  const offer = await createOffer({
     buyerId: user.id,
     sellerId: listing.sellerId,
     listingId: listing.id,
@@ -4171,6 +4172,8 @@ export async function makeOfferAction(formData: FormData) {
 
   revalidatePath("/buyer");
   revalidatePath(`/listings/${listing.id}`);
+  const seller = await findUserById(listing.sellerId);
+  if (seller) await sendOfferReceivedNotification(offer, seller);
   redirect("/buyer?saved=offer");
 }
 

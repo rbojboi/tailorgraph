@@ -1,0 +1,45 @@
+name: Email delivery worker
+
+on:
+  schedule:
+    - cron: '2-57/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-email-worker
+  cancel-in-progress: false
+
+jobs:
+  deliver:
+    if: github.repository == 'rbojboi/tailorgraph' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      id-token: write
+    steps:
+      - name: Deliver pending emails
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const audience = 'https://www.tailorgraph.com/api/cron/email';
+          const url = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          url.searchParams.set('audience', audience);
+          const identity = await fetch(url, {
+            headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+            signal: AbortSignal.timeout(15000)
+          });
+          if (!identity.ok) throw new Error(`GitHub identity request failed (${identity.status})`);
+          const { value } = await identity.json();
+          if (!value) throw new Error('GitHub identity token missing');
+          console.log(`::add-mask::${value}`);
+          const response = await fetch(audience, {
+            headers: { Authorization: `Bearer ${value}` },
+            redirect: 'error', signal: AbortSignal.timeout(70000)
+          });
+          if (!response.ok) throw new Error(`Email worker failed (${response.status})`);
+          const result = await response.json();
+          console.log(JSON.stringify(result));
+          if (!result.configured || result.failed > 0) throw new Error('Email delivery requires review');
+          NODE

@@ -1,14 +1,21 @@
+import { createHash } from "node:crypto";
+import { renderEmailTemplate, type EmailLayoutInput } from "@/lib/email-template";
+import { enqueueEmail, drainEmailOutbox, EmailDeliveryError } from "@/lib/email-outbox";
 import { Resend } from "resend";
 import twilio from "twilio";
 import { getAdminEmails } from "@/lib/admin";
 import { getAppUrl } from "@/lib/stripe";
 import { hasNotificationDelivery, recordNotificationDelivery } from "@/lib/store";
-import type { Listing, MessageThread, Order, SupportRequest, User } from "@/lib/types";
+import type { Listing, MessageThread, Order, Offer, SupportRequest, User } from "@/lib/types";
 
 let resendClient: Resend | null = null;
 let twilioClient: ReturnType<typeof twilio> | null = null;
 
-type EmailInput = {
+export type EmailInput = {
+  durable?: boolean;
+  recipientUserId?: string;
+  preferenceKey?: keyof User["notificationPreferences"];
+  messageId?: string;
   eventKey: string;
   eventType: string;
   to: string;
@@ -65,27 +72,6 @@ type WelcomeNotificationContext = {
 
 type SupportRequestNotificationContext = {
   request: SupportRequest;
-};
-
-type EmailAction = {
-  label: string;
-  url: string;
-};
-
-type EmailDetail = {
-  label: string;
-  value: string;
-};
-
-type EmailLayoutInput = {
-  eyebrow?: string;
-  title: string;
-  introParagraphs?: string[];
-  bodyHtml?: string;
-  details?: EmailDetail[];
-  primaryAction?: EmailAction;
-  secondaryAction?: EmailAction;
-  footerMessage?: string;
 };
 
 export type EmailSenderCategory =
@@ -331,13 +317,29 @@ function shouldSendOptionalEmail(
 }
 
 async function sendEmailNotification(input: EmailInput) {
+  if (input.durable && !input.skipDedupe) {
+    await enqueueEmail(input);
+    if (isEmailNotificationConfigured() && !input.messageId) {
+      await drainEmailOutbox(deliverEmailNotification, input.eventKey);
+    }
+    return;
+  }
+  await deliverEmailNotification(input);
+}
+
+export async function deliverPendingEmails() {
+  if (!isEmailNotificationConfigured()) return { configured: false, sent: 0, skipped: 0, retried: 0, failed: 0 };
+  return { configured: true, ...await drainEmailOutbox(deliverEmailNotification) };
+}
+
+async function deliverEmailNotification(input: EmailInput) {
   if (!isEmailNotificationConfigured()) {
     return;
   }
 
   const recipient = input.to.trim();
   if (!recipient) {
-    return;
+    throw new EmailDeliveryError("missing_recipient", false);
   }
 
   if (!input.skipDedupe && (await hasNotificationDelivery(input.eventKey))) {
@@ -356,7 +358,11 @@ async function sendEmailNotification(input: EmailInput) {
     html: input.html,
     text: input.text
   }, input.skipDedupe ? undefined : { idempotencyKey: input.eventKey });
-  if (result.error) throw new Error(`Email delivery failed: ${result.error.message}`);
+  if (result.error) {
+    const status = result.error.statusCode;
+    throw new EmailDeliveryError(result.error.name, !status || status === 429 || status >= 500 || result.error.name === "concurrent_idempotent_requests");
+  }
+  if (!result.data?.id) throw new EmailDeliveryError("missing_provider_receipt", true);
 
   if (!input.skipDedupe) {
     await recordNotificationDelivery({
@@ -428,74 +434,8 @@ function formatShortDate(date: Date) {
   }).format(date);
 }
 
-function renderEmailAction(action: EmailAction, variant: "primary" | "secondary" = "primary") {
-  const background = variant === "primary" ? "#1f4d3b" : "#efe7dc";
-  const color = variant === "primary" ? "#f7f3ee" : "#1f4d3b";
-  const border = variant === "primary" ? "none" : "1px solid #d8cfc3";
-
-  return `<a href="${escapeHtml(action.url)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:${background};color:${color};text-decoration:none;font-weight:600;border:${border}">${escapeHtml(action.label)}</a>`;
-}
-
-function renderEmailDetails(details: EmailDetail[]) {
-  if (!details.length) {
-    return "";
-  }
-
-  return `
-    <div style="margin:20px 0 0;padding:16px 18px;border:1px solid #e4dbcf;border-radius:18px;background:#fbf8f4">
-      ${details
-        .map(
-          (detail, index) => `
-            <div style="padding:${index === 0 ? "0" : "12px 0 0"};margin:${index === details.length - 1 ? "0" : "0 0 12px"};${index === details.length - 1 ? "" : "border-bottom:1px solid #ebe2d6;"}">
-              <div style="font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#7c6f64;margin:0 0 4px">${escapeHtml(detail.label)}</div>
-              <div style="font-size:16px;color:#292524">${escapeHtml(detail.value)}</div>
-            </div>
-          `
-        )
-        .join("")}
-    </div>
-  `;
-}
-
 function renderEmailLayout(input: EmailLayoutInput) {
-  const appUrl = getAppUrl();
-  const supportUrl = `${appUrl}/support`;
-  const footerMessage = input.footerMessage ?? "Need help? Visit TailorGraph Support.";
-  const introHtml = (input.introParagraphs ?? [])
-    .map((paragraph) => `<p style="margin:0 0 12px;color:#44403c;font-size:16px;line-height:1.65">${escapeHtml(paragraph)}</p>`)
-    .join("");
-  const detailsHtml = renderEmailDetails(input.details ?? []);
-  const actionHtml = [
-    input.primaryAction ? renderEmailAction(input.primaryAction, "primary") : "",
-    input.secondaryAction ? renderEmailAction(input.secondaryAction, "secondary") : ""
-  ]
-    .filter(Boolean)
-    .join('<span style="display:inline-block;width:12px"></span>');
-
-  return `
-    <div style="margin:0;padding:24px;background:#f3eee7;font-family:Georgia,serif;color:#292524">
-      <div style="max-width:640px;margin:0 auto">
-        <div style="margin:0 0 14px">
-          <span style="display:inline-block;padding:7px 12px;border-radius:999px;background:#e7ded1;color:#5f5146;font-size:12px;letter-spacing:0.12em;text-transform:uppercase">${escapeHtml(
-            input.eyebrow ?? "TailorGraph"
-          )}</span>
-        </div>
-        <div style="background:#fffdf9;border:1px solid #e4dbcf;border-radius:28px;padding:32px 28px;box-shadow:0 10px 30px rgba(41,37,36,0.06)">
-          <h1 style="margin:0 0 18px;font-size:32px;line-height:1.15;color:#1c1917">${escapeHtml(input.title)}</h1>
-          ${introHtml}
-          ${input.bodyHtml ?? ""}
-          ${detailsHtml}
-          ${actionHtml ? `<div style="margin:24px 0 0">${actionHtml}</div>` : ""}
-        </div>
-        <div style="padding:18px 8px 0;color:#6b5f55;font-size:13px;line-height:1.6">
-          <p style="margin:0 0 8px">${escapeHtml(footerMessage)}</p>
-          <p style="margin:0"><a href="${escapeHtml(supportUrl)}" style="color:#1f4d3b;text-decoration:none">Support</a> | <a href="${escapeHtml(
-            appUrl
-          )}" style="color:#1f4d3b;text-decoration:none">TailorGraph</a></p>
-        </div>
-      </div>
-    </div>
-  `;
+  return renderEmailTemplate(input, getAppUrl());
 }
 
 function purchaseBuyerEmail(context: OrderNotificationContext) {
@@ -691,8 +631,9 @@ function directMessageEmail(context: DirectMessageNotificationContext) {
 
   return {
     subject: `New TailorGraph message from @${senderName}`,
-    text: `You have a new TailorGraph message from @${senderName}.\n\n"${preview}"\n\nReply here: ${messagesUrl}`,
+    text: `Email preferences: ${getAppUrl()}/account/notifications\n\nYou have a new TailorGraph message from @${senderName}.\n\n"${preview}"\n\nReply here: ${messagesUrl}`,
     html: renderEmailLayout({
+      optional: true,
       eyebrow: "Messages",
       title: "New message",
       introParagraphs: [`You have a new message from @${senderName}.`],
@@ -713,8 +654,9 @@ function newListingFollowerEmail(context: NewListingNotificationContext) {
 
   return {
     subject: `New TailorGraph listing from @${sellerName}`,
-    text: `@${sellerName} just listed a new item on TailorGraph.\n\n${context.listing.title}\n${formatCurrency(context.listing.price)}\n\nView listing: ${listingUrl}`,
+    text: `Email preferences: ${getAppUrl()}/account/notifications\n\n@${sellerName} just listed a new item on TailorGraph.\n\n${context.listing.title}\n${formatCurrency(context.listing.price)}\n\nView listing: ${listingUrl}`,
     html: renderEmailLayout({
+      optional: true,
       eyebrow: "Alerts",
       title: `New listing from @${sellerName}`,
       introParagraphs: ["A seller you follow just listed something new on TailorGraph."],
@@ -777,8 +719,9 @@ function welcomeEmail(context: WelcomeNotificationContext) {
 
   return {
     subject: "Welcome to TailorGraph",
-    text: `Welcome to TailorGraph.\n\nStart with your measurements: ${measurementsUrl}\nBrowse the marketplace: ${marketplaceUrl}\nNeed help? Visit Support: ${supportUrl}`,
+    text: `Email preferences: ${getAppUrl()}/account/notifications\n\nWelcome to TailorGraph.\n\nStart with your measurements: ${measurementsUrl}\nBrowse the marketplace: ${marketplaceUrl}\nNeed help? Visit Support: ${supportUrl}`,
     html: renderEmailLayout({
+      optional: true,
       eyebrow: "Hello",
       title: "Welcome to TailorGraph",
       introParagraphs: [
@@ -850,6 +793,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
   await sendEmailNotification({
     eventKey: `purchase:${context.order.id}:buyer_email`,
     eventType: "purchase_confirmation",
+    durable: true,
     to: context.buyer.email,
     category: "buyer_orders",
     ...buyerEmail
@@ -859,6 +803,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
   await sendEmailNotification({
     eventKey: `purchase:${context.order.id}:seller_email`,
     eventType: "seller_order_alert",
+    durable: true,
     to: context.seller.email,
     category: "seller_orders",
     ...sellerEmail
@@ -870,6 +815,7 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
   await sendEmailNotification({
     eventKey: `shipment:${context.order.id}:buyer_email`,
     eventType: "shipment_update",
+    durable: true,
     to: context.buyer.email,
     category: "buyer_orders",
     ...buyerEmail
@@ -897,6 +843,7 @@ export async function sendSellerShipmentLabelNotification(
   await sendEmailNotification({
     eventKey: options?.eventKey ?? `shipment:${context.order.id}:seller_label_email`,
     eventType: "seller_shipment_label",
+    durable: true,
     to: context.seller.email,
     category: "seller_orders",
     skipDedupe: options?.skipDedupe,
@@ -912,6 +859,7 @@ export async function sendBuyerReturnLabelNotification(
   await sendEmailNotification({
     eventKey: options?.eventKey ?? `return:${context.order.id}:buyer_label_email`,
     eventType: "buyer_return_label",
+    durable: true,
     to: context.buyer.email,
     category: "buyer_orders",
     skipDedupe: options?.skipDedupe,
@@ -928,6 +876,10 @@ export async function sendDirectMessageNotification(context: DirectMessageNotifi
   await sendEmailNotification({
     eventKey: `dm:${context.messageId}:email`,
     eventType: "direct_message",
+    durable: true,
+    messageId: context.messageId,
+    recipientUserId: context.recipient.id,
+    preferenceKey: "messagesEmail",
     to: context.recipient.email,
     category: "messages",
     ...recipientEmail
@@ -943,6 +895,9 @@ export async function sendNewListingFollowerNotification(context: NewListingNoti
   await sendEmailNotification({
     eventKey: `listing:${context.listing.id}:follower:${context.recipient.id}:email`,
     eventType: "new_listing",
+    durable: true,
+    recipientUserId: context.recipient.id,
+    preferenceKey: "savedSellerEmail",
     to: context.recipient.email,
     category: "alerts",
     ...email
@@ -952,7 +907,7 @@ export async function sendNewListingFollowerNotification(context: NewListingNoti
 export async function sendEmailVerificationNotification(context: AccountEmailVerificationContext) {
   const email = emailVerificationEmail(context);
   await sendEmailNotification({
-    eventKey: `email-verification:${context.user.id}:${context.user.email}`,
+    eventKey: `email-verification:${context.user.id}:${createHash("sha256").update(context.verificationUrl).digest("hex")}`,
     eventType: "email_verification",
     to: context.user.email,
     category: "no_reply",
@@ -963,7 +918,7 @@ export async function sendEmailVerificationNotification(context: AccountEmailVer
 export async function sendPasswordResetNotification(context: PasswordResetNotificationContext) {
   const email = passwordResetEmail(context);
   await sendEmailNotification({
-    eventKey: `password-reset:${context.user.id}:${context.user.email}`,
+    eventKey: `password-reset:${context.user.id}:${createHash("sha256").update(context.resetUrl).digest("hex")}`,
     eventType: "password_reset",
     to: context.user.email,
     category: "no_reply",
@@ -980,6 +935,9 @@ export async function sendWelcomeNotification(context: WelcomeNotificationContex
   await sendEmailNotification({
     eventKey: `welcome:${context.user.id}:${context.user.email}`,
     eventType: "welcome",
+    durable: true,
+    recipientUserId: context.user.id,
+    preferenceKey: "helloEmail",
     to: context.user.email,
     category: "hello",
     ...email
@@ -991,6 +949,7 @@ export async function sendSupportRequestNotifications(context: SupportRequestNot
   await sendEmailNotification({
     eventKey: `support-request:${context.request.id}:requester`,
     eventType: "support_request_confirmation",
+    durable: true,
     to: context.request.requesterEmail,
     category: "support",
     ...confirmation
@@ -1006,6 +965,7 @@ export async function sendSupportRequestNotifications(context: SupportRequestNot
     await sendEmailNotification({
       eventKey: `support-request:${context.request.id}:admin:${adminEmail}`,
       eventType: "support_request_alert",
+    durable: true,
       to: adminEmail,
       category: "support",
       ...internal
@@ -1063,3 +1023,29 @@ export async function sendReturnEmail(to: string, eventKey: string, subject: str
   await sendEmailNotification({ to, eventKey, eventType: "return_update", category: "support", subject, text,
     html: renderEmailLayout({ title: subject, introParagraphs: [text], primaryAction: { label: "View return", url } }) });
 }
+
+function offerReceivedEmail(offer: Offer) {
+  const url = `${getAppUrl()}/seller?offerStatus=active`;
+  return {
+    subject: `New offer on ${offer.listingTitle}`,
+    text: `@${offer.buyerUsername} offered ${formatCurrency(offer.amount)} for ${offer.listingTitle}. This is an offer, not a paid order.\n\nReview offer: ${url}\nEmail preferences: ${getAppUrl()}/account/notifications`,
+    html: renderEmailLayout({
+      eyebrow: "Offers", title: "An offer for your item", optional: true,
+      introParagraphs: [`@${offer.buyerUsername} has made an offer. Review it in your seller dashboard.`, "This is an offer, not a paid order."],
+      details: [{ label: "Item", value: offer.listingTitle }, { label: "Offer", value: formatCurrency(offer.amount) }],
+      primaryAction: { label: "Review offer", url }
+    })
+  };
+}
+
+export async function sendOfferReceivedNotification(offer: Offer, seller: User) {
+  if (!seller.notificationPreferences.offerAndPriceDropEmail) return;
+  await sendEmailNotification({
+    eventKey: `offer:${offer.id}:seller_email`, eventType: "offer_received", durable: true,
+    to: seller.email, recipientUserId: seller.id, preferenceKey: "offerAndPriceDropEmail",
+    category: "seller_orders", ...offerReceivedEmail(offer)
+  });
+}
+
+// Pure rendering entry points for local previews; these never call a delivery provider.
+export const emailPreviews = { purchaseBuyerEmail, purchaseSellerEmail, shipmentBuyerEmail, directMessageEmail, offerReceivedEmail, welcomeEmail };
