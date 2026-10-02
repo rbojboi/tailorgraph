@@ -110,6 +110,11 @@ test('offer stays private until exact-total consent and successful card setup; s
   await completeSetup(id);assert.equal((await one('offers')).status,'active');assert.equal(intents.size,0);
   assert.deepEqual(calls.map(c=>c[0]),['checkout']);
 });
+test('an abandoned draft expires privately without notifying the seller',async()=>{
+  await auth.createBindingOffer('buyer','listing',80,'Private draft');
+  await query("UPDATE offers SET expires_at=NOW()-INTERVAL '1 second'");await offers.expireOffers();
+  assert.equal((await one('offers')).status,'expired');assert.equal((await query('SELECT * FROM notification_events')).rows.length,0);
+});
 test('seller acceptance charges once, freezes shipping, and records a paid order atomically',async()=>{
   const offer=await authorize();await query('UPDATE listings SET shipping_price=50');
   await pay.acceptBindingOffer('seller',offer.id,offer.revision);

@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS commerce_locks (key TEXT PRIMARY KEY,token TEXT NOT N
 
 CREATE OR REPLACE FUNCTION tailorgraph_offer_payment_event() RETURNS trigger AS $$
 BEGIN
+ IF TG_OP='UPDATE' AND OLD.status='draft' AND NEW.status='expired' THEN RETURN NEW; END IF;
  IF NEW.status NOT IN ('draft','authorizing') AND (TG_OP='INSERT' OR NEW.revision<>OLD.revision OR NEW.payment_state IS DISTINCT FROM OLD.payment_state) THEN
   INSERT INTO notification_events(kind,payload) VALUES('offer_changed',jsonb_build_object(
    'offerId',NEW.id,'buyerId',NEW.buyer_id,'sellerId',NEW.seller_id,'listingId',NEW.listing_id,
