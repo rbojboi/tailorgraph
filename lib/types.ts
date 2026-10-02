@@ -221,7 +221,7 @@ export type OrderStatus =
   | "refunded"
   | "failed";
 
-export type OfferStatus = "active" | "countered" | "accepted" | "rejected" | "expired";
+export type OfferStatus = "draft" | "active" | "countered" | "accepted" | "rejected" | "expired";
 export type ReturnPolicy = "no_returns" | "seller_approval" | "automatic_returns";
 
 export type SupportRequestKind = "support" | "dispute";
@@ -562,6 +562,9 @@ export type SellerReviewScores = {
 };
 
 export type Offer = {
+  autoCharge?: boolean;
+  paymentState?: string;
+  paidOrderId?: string;
   expiresAt?: string;
   lastActorId?: string;
   revision?: number;

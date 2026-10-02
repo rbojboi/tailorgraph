@@ -24,13 +24,14 @@ export function getAppUrl() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
-export function getStripe() {
+export function getStripe(options: {timeout?:number;maxNetworkRetries?:number} = {}) {
   if (!stripeSecretKey) {
     throw new Error("STRIPE_SECRET_KEY is not configured");
   }
 
   return new Stripe(stripeSecretKey, {
-    apiVersion: "2026-02-25.clover"
+    apiVersion: "2026-02-25.clover",
+    ...options
   });
 }
 

@@ -8,6 +8,10 @@ export async function GET(request: Request) {
   if (!(await authorizeEmailWorker(request))) {
     return new Response("Unauthorized", { status: 401 });
   }
+  const {processCommercePayments}=await import("@/lib/commerce-payments");
+  const {processOfferAuthorizations}=await import("@/lib/offer-authorization");
+  await processOfferAuthorizations();
+  await processCommercePayments();
   const result = await deliverPendingEmails();
   return Response.json(result, { status: result.configured ? 200 : 503 });
 }

@@ -28,6 +28,10 @@ type Job = {
 };
 
 export async function shouldSkipEmail(input: EmailInput) {
+  if(input.offerId && input.offerPaymentState) {
+    const offer=await requirePool().query("SELECT payment_state FROM offers WHERE id=$1",[input.offerId]);
+    if(offer.rows[0]?.payment_state!==input.offerPaymentState) return true;
+  }
   if (input.recipientUserId) {
     const user = await findUserById(input.recipientUserId);
     // Never send an old account's queued content after its email address changes.

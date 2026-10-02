@@ -31,6 +31,26 @@ export async function POST(request: Request) {
     return new Response(message, { status: 400 });
   }
 
+  if(event.type.startsWith("payment_intent.")) {
+    const intent=event.data.object as Stripe.PaymentIntent;
+    if(intent.metadata?.paymentAttempt) {
+      const {processCommercePayment}=await import("@/lib/commerce-payments");
+      await processCommercePayment(intent.metadata.paymentAttempt);
+      return Response.json({received:true});
+    }
+  }
+  if(["checkout.session.completed","checkout.session.async_payment_succeeded","checkout.session.expired","checkout.session.async_payment_failed"].includes(event.type)) {
+    const session=await stripe.checkout.sessions.retrieve((event.data.object as Stripe.Checkout.Session).id);
+    if(session.metadata?.kind==="offer_authorization") {
+      const {completeOfferAuthorization}=await import("@/lib/offer-authorization");
+      await completeOfferAuthorization(session);return Response.json({received:true});
+    }
+    if(session.metadata?.paymentAttempt) {
+      const {handleCommerceSession}=await import("@/lib/commerce-payments");
+      await handleCommerceSession(session);return Response.json({received:true});
+    }
+  }
+
   if (
     event.type === "checkout.session.completed" ||
     event.type === "checkout.session.async_payment_succeeded"

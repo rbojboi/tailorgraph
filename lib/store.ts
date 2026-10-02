@@ -1,7 +1,8 @@
 import { NOTIFICATION_SCHEMA } from "@/lib/notification-schema";
+import { COMMERCE_SCHEMA } from "@/lib/commerce-schema";
 import { EMAIL_OUTBOX_SCHEMA } from "@/lib/email-outbox-schema";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { RETURNS_SCHEMA } from "@/lib/returns-schema";
 import {
   CURRENT_SCHEMA_VERSION,
@@ -726,6 +727,7 @@ async function initSchema() {
   await client.query(RETURNS_SCHEMA);
   await client.query(EMAIL_OUTBOX_SCHEMA);
   await client.query(NOTIFICATION_SCHEMA);
+  await client.query(COMMERCE_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -1096,6 +1098,9 @@ function mapOrderReview(row: Record<string, unknown>): OrderReview {
 
 function mapOffer(row: Record<string, unknown>): Offer {
   return {
+    autoCharge: Boolean(row.auto_charge),
+    paymentState: row.payment_state ? String(row.payment_state) : undefined,
+    paidOrderId: row.paid_order_id ? String(row.paid_order_id) : undefined,
     id: String(row.id),
     buyerId: String(row.buyer_id),
     buyerUsername: String(row.buyer_username ?? ""),
@@ -2316,10 +2321,11 @@ export async function createOrder(
     | "returnProviderRateId"
     | "returnProviderTransactionId"
     | "returnStatus"
-  >
+  >,
+  transaction?: PoolClient
 ): Promise<Order> {
   await ensureSchema();
-  const client = requirePool();
+  const client = transaction ?? requirePool();
   const id = randomUUID();
   const result = await client.query(
     `INSERT INTO orders (
@@ -2993,7 +2999,7 @@ export async function listSellerOffers(userId: string, status: OfferStatus | "al
        INNER JOIN users AS buyer ON buyer.id = offers.buyer_id
        INNER JOIN users AS seller ON seller.id = offers.seller_id
        INNER JOIN listings ON listings.id = offers.listing_id
-      WHERE offers.seller_id = $1
+      WHERE offers.seller_id = $1 AND offers.status <> 'draft'
         AND ($2::text = 'all' OR offers.status = $2)
       ORDER BY offers.updated_at DESC, offers.created_at DESC`,
     [userId, status]

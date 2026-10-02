@@ -99,7 +99,7 @@ export default async function SellerPage({
 
   const requestedOfferStatus = firstValue(params.offerStatus) as OfferStatus | "all" | undefined;
   const selectedOfferStatus: OfferStatus | "all" =
-    requestedOfferStatus && ["all", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
+    requestedOfferStatus && ["all", "draft", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
       ? requestedOfferStatus
       : "all";
   const stripeEnabled = isStripeConfigured();

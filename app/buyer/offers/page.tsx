@@ -48,7 +48,7 @@ export default async function BuyerOffersPage({
 
   const requestedOfferStatus = firstValue(params.offerStatus) as BuyerOfferFilter | undefined;
   const selectedOfferStatus: BuyerOfferFilter =
-    requestedOfferStatus && ["all", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
+    requestedOfferStatus && ["all", "draft", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
       ? requestedOfferStatus
       : "all";
   const offers = await listBuyerOffers(user.id, selectedOfferStatus);

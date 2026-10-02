@@ -5,14 +5,15 @@ import { filterAndSortMarketplaceListings } from "./marketplace-search";
 import { getAppUrl } from "./stripe";
 import type { EmailInput } from "./notifications";
 import type { OptionalEmailKey } from "./notification-preferences";
+import { offerEmailCopy } from "./offer-email";
 
-async function queueNotice(userId:string,eventKey:string,title:string,text:string,path:string,key?:OptionalEmailKey,guard:Partial<EmailInput>={}) {
+async function queueNotice(userId:string,eventKey:string,title:string,text:string,path:string,key?:OptionalEmailKey,guard:Partial<EmailInput>={},button="View details") {
   const user=await findUserById(userId);
   if (!user) return;
   const url=getAppUrl()+path;
   await enqueueEmail({eventKey,eventType:key??"shipping_reminder",recipientUserId:user.id,to:user.email,
     preferenceKey:key,category:key?"alerts":path.startsWith("/seller")?"seller_orders":"buyer_orders",
-    subject:title,text:`${text}\n\n${url}`,html:renderEmailTemplate({title,introParagraphs:[text],optional:Boolean(key),primaryAction:{label:"View details",url}},getAppUrl()),...guard});
+    subject:title,text:`${text}\n\n${url}`,html:renderEmailTemplate({title,introParagraphs:[text],optional:Boolean(key),primaryAction:{label:button,url}},getAppUrl()),...guard});
 }
 
 export function savedSearchFilters(queryString:string) {
@@ -27,14 +28,29 @@ export async function processNotificationEvents() {
   const events=await db.query("SELECT * FROM notification_events WHERE completed_at IS NULL ORDER BY id LIMIT 2");
   for (const event of events.rows) {
     const p=event.payload;
-    const listing=await findListingById(p.listingId);
+    const listing=p.listingId?await findListingById(p.listingId):null;
     let more=false;
-    if (event.kind==="offer_changed" && listing) {
+    if(event.kind==="purchase_paid") {
+      const {findOrderById}=await import("./store");
+      const order=await findOrderById(p.orderId);
+      if(order && !["pending_payment","failed","canceled"].includes(order.status)) {
+        const [buyer,seller,orderListing]=await Promise.all([findUserById(order.buyerId),findUserById(order.sellerId),findListingById(order.listingId)]);
+        if(buyer && seller) {
+          const {sendOrderPurchasedNotifications}=await import("./notifications");
+          await sendOrderPurchasedNotifications({order,listing:orderListing,buyer,seller});
+        }
+      }
+    } else if (event.kind==="offer_changed" && listing) {
       const recipients=["accepted","rejected","expired"].includes(p.status)?[p.buyerId,p.sellerId]:[p.actorId===p.sellerId?p.buyerId:p.sellerId];
-      const label=p.status==="active"?"New offer":p.status==="countered"?"Counteroffer":`Offer ${p.status==="rejected"?"declined":p.status}`;
-      for (const id of recipients) await queueNotice(id,`offer:${p.offerId}:${p.revision}:${id}`,label,
-        `${listing.title}: $${Number(p.amount).toFixed(2)}. ${p.status==="accepted"?"Payment is still required. The buyer can check out at the agreed price within seven days, while the item remains available.":p.status==="expired"?"The response or purchase window has ended.":"Visit your offers to see the current status and respond."}`,
-        id===p.sellerId?"/seller":"/buyer/offers","offerAndPriceDropEmail");
+      const essential=p.autoCharge && Boolean(p.paymentState);
+      const receipt=p.orderId?(await db.query("SELECT amount FROM orders WHERE id=$1",[p.orderId])).rows[0]:null;
+      if(p.autoCharge && p.paymentState==="paid" && !receipt) throw new Error("Paid offer receipt is missing.");
+      for(const id of recipients) {
+        const copy=offerEmailCopy(p,listing.title,id===p.buyerId,receipt?Number(receipt.amount):undefined);
+        await queueNotice(id,`offer:${p.offerId}:${p.revision}:${id}`,copy.subject,copy.text,
+          id===p.sellerId?"/seller":p.paymentState==="paid"?"/buyer/orders":"/buyer/offers",
+          essential?undefined:"offerAndPriceDropEmail",essential?{offerId:p.offerId,offerPaymentState:p.paymentState,eventType:"offer_payment"}:{},copy.button);
+      }
     } else if (listing?.status==="active" && event.kind==="price_drop") {
       const saved=await db.query(`SELECT user_id AS id FROM user_saved_listings WHERE listing_id=$1 AND created_at<=$2 AND user_id>$3 ORDER BY user_id LIMIT 100`,[listing.id,event.created_at,p.cursor??""]);
       for (const row of saved.rows) if (row.id!==listing.sellerId) await queueNotice(row.id,`price:${event.id}:${row.id}`,"A saved item has a lower price",

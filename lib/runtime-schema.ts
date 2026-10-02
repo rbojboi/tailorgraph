@@ -1,4 +1,4 @@
-export const CURRENT_SCHEMA_VERSION = 37;
+export const CURRENT_SCHEMA_VERSION = 38;
 
 export function shouldRunRuntimeSchemaInit(env: NodeJS.ProcessEnv = process.env) {
   if (!env.DATABASE_URL) {

@@ -27,6 +27,8 @@ export type EmailInput = {
   requireSavedItem?: boolean;
   maximumPrice?: number;
   orderId?: string;
+  offerId?: string;
+  offerPaymentState?: string;
   requireUnshipped?: boolean;
   messageId?: string;
   eventKey: string;

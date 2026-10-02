@@ -18,7 +18,7 @@ Optional emails include a signed category-specific unsubscribe link plus one-cli
 
 ## Offers and saved alerts
 
-The receiving party can accept, decline, or counter a current offer. Each change has a revision to reject stale responses. New and counter offers expire after seven days; accepted prices remain valid for seven days after acceptance. Acceptance does not charge a card or reserve inventory. Checkout applies the lowest current accepted price for that buyer, or the public price if it is lower. Checkout sessions already created retain their quoted price.
+The receiving party can accept, decline, or counter a current offer. Each change has a revision to reject stale responses. New offers require explicit authorization of the item and shipping total through Stripe card setup before reaching the seller. Acceptance reserves the garment and charges automatically; counteroffers require renewed approval. Payment processing, success, and buyer-action notices are essential order mail and use the existing buyer/seller sender addresses. Legacy offers without recorded consent retain their seven-day checkout flow. See [offer-payments.md](./offer-payments.md) for recovery, inventory and rollout details.
 
 Saved-item price drops go only to people who saved the item before the drop. Saved-search alerts use the same filters and fit matching as the marketplace, including repeated query parameters. Only new publications after a search was saved are eligible. Removed saves, sold listings, and price increases suppress stale pending alerts. Offer messages describe the event and direct the recipient to the current offer state.
 
@@ -28,7 +28,7 @@ Payment records a shipping deadline using the listing's processing time in busin
 
 ## Rollout
 
-The production build runs additive schema migration 37 after the existing version-36 migration, before application promotion. Preview builds do not migrate a shared production database. To exercise a preview against an isolated database, run the normal full database migration with runtime schema initialization enabled. An unmigrated production database should not serve this branch.
+The production build runs additive schema migrations 37 and 38 after the existing version-36 migration, before application promotion. Preview builds do not migrate a shared production database. To exercise a preview against an isolated database, run the normal full database migration with runtime schema initialization enabled. An unmigrated production database should not serve this branch.
 
 The delivery dashboard starts recording new activity after rollout; past Resend sends are not backfilled. Optional features remain opt-in according to existing account preferences. Fit Feed and seller performance summaries are still future features; their preference controls do not create those campaigns.
 

@@ -679,7 +679,7 @@ export default async function ListingDetail({
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-stone-50">Make an Offer</p>
-                      <p className="mt-1 text-xs text-stone-400">Enter your offer amount below in dollars. Adding a note for the seller is optional.</p>
+                      <p className="mt-1 text-xs text-stone-400">Enter your offer amount in USD. Next, review shipping and authorize your card. If the seller accepts, payment is automatic.</p>
                     </div>
                     <Link
                       href={`/listings/${listing.id}`}
@@ -703,7 +703,7 @@ export default async function ListingDetail({
                     />
                   </label>
                   <button className="mt-4 w-full rounded-full border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
-                    Send Offer
+                    Review and Authorize Offer
                   </button>
                 </form>
               ) : null}

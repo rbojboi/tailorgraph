@@ -3,6 +3,7 @@ import {test,before,beforeEach,after,mock} from "node:test";
 import {PGlite} from "@electric-sql/pglite";
 import {createHmac} from "node:crypto";
 import {NOTIFICATION_SCHEMA} from "../lib/notification-schema.ts";
+import {COMMERCE_SCHEMA} from "../lib/commerce-schema.ts";
 import {EMAIL_OUTBOX_SCHEMA} from "../lib/email-outbox-schema.ts";
 import {nextDigestDate} from "../lib/notification-preferences.ts";
 import {unsubscribeToken,readUnsubscribeToken} from "../lib/email-unsubscribe.ts";
@@ -27,11 +28,11 @@ before(async()=>{
  await db.exec(`CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT,notification_preferences JSONB);
  CREATE TABLE listings(id TEXT PRIMARY KEY,seller_id TEXT,status TEXT,price DOUBLE PRECISION,processing_days INTEGER,allow_offers BOOLEAN DEFAULT TRUE);
  CREATE TABLE offers(id TEXT PRIMARY KEY,buyer_id TEXT,seller_id TEXT,listing_id TEXT,amount DOUBLE PRECISION,status TEXT,created_at TIMESTAMPTZ DEFAULT NOW(),updated_at TIMESTAMPTZ DEFAULT NOW());
- CREATE TABLE orders(id TEXT PRIMARY KEY,buyer_id TEXT,seller_id TEXT,listing_id TEXT,listing_title TEXT,status TEXT,shipped_at TIMESTAMPTZ);
+ CREATE TABLE orders(id TEXT PRIMARY KEY,buyer_id TEXT,seller_id TEXT,listing_id TEXT,listing_title TEXT,status TEXT,shipped_at TIMESTAMPTZ,amount DOUBLE PRECISION DEFAULT 100);
  CREATE TABLE user_saved_listings(user_id TEXT,listing_id TEXT,created_at TIMESTAMPTZ DEFAULT NOW());
  CREATE TABLE user_saved_searches(id TEXT PRIMARY KEY,user_id TEXT,query_string TEXT,name TEXT,created_at TIMESTAMPTZ DEFAULT NOW());
  CREATE TABLE notification_deliveries(event_key TEXT PRIMARY KEY);`);
- await db.exec(EMAIL_OUTBOX_SCHEMA);await db.exec(NOTIFICATION_SCHEMA);
+ await db.exec(EMAIL_OUTBOX_SCHEMA);await db.exec(NOTIFICATION_SCHEMA);await db.exec(COMMERCE_SCHEMA);
 });
 beforeEach(async()=>{
  await db.exec("TRUNCATE users,listings,offers,orders,user_saved_listings,user_saved_searches,notification_events,email_outbox,email_digest_items,email_delivery_log,email_suppressions,notification_deliveries CASCADE");
@@ -68,6 +69,23 @@ test("sold listings cannot accept offers and declined offers cannot reopen",asyn
  await assert.rejects(respondToOffer("seller","offer",0,"accept"),/no longer available/);
  await query("UPDATE listings SET status='active'");await respondToOffer("seller","offer",0,"decline");
  await assert.rejects(respondToOffer("buyer","offer",1,"counter",70),/no longer available/);
+});
+
+test("automatic offer payment notices bypass optional opt-outs and suppress stale payment states",async()=>{
+ await offer();await query("TRUNCATE notification_events");
+ await query(`UPDATE users SET notification_preferences='{"offerAndPriceDropEmail":false}'::jsonb`);
+ await query("UPDATE offers SET auto_charge=TRUE,status='accepted',payment_state='needs_payment',revision=revision+1");
+ await processNotificationEvents();
+ const rows=(await query("SELECT payload FROM email_outbox")).rows;
+ assert.equal(rows.length,2);assert.ok(rows.every(row=>!row.payload.preferenceKey));
+ assert.deepEqual(rows.map(row=>row.payload.category).sort(),['buyer_orders','seller_orders']);
+ assert.equal(await shouldSkipEmail(rows[0].payload),false);
+ await query("INSERT INTO orders(id,amount) VALUES('paid-order',90)");
+ await query("UPDATE offers SET payment_state='paid',paid_order_id='paid-order',revision=revision+1");
+ assert.equal(await shouldSkipEmail(rows[0].payload),true);await processNotificationEvents();
+ const paid=(await query("SELECT payload FROM email_outbox WHERE payload->>'offerPaymentState'='paid'")).rows;
+ assert.equal(paid.length,2);assert.ok(paid.every(row=>row.payload.text.includes('$90.00')));
+ assert.ok(paid.every(row=>!row.payload.text.includes('Payment is still required')));
 });
 test("daily digests batch once, erase item content, and retain stable content on retries",async()=>{
  await query(`UPDATE users SET notification_preferences=notification_preferences||'{"emailFrequency":{"savedItemEmail":"daily"}}'::jsonb WHERE id='buyer'`);

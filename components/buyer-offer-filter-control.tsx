@@ -16,6 +16,7 @@ export function BuyerOfferFilterControl({
           className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm outline-none"
         >
           <option value="all">All</option>
+          <option value="draft">Awaiting authorization</option>
           <option value="active">Active</option>
           <option value="countered">Countered</option>
           <option value="accepted">Accepted</option>
