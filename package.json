@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "email:preview": "node --import ./scripts/register-ts-alias-loader.mjs scripts/preview-emails.mjs --serve",
+    "email:render": "node --import ./scripts/register-ts-alias-loader.mjs scripts/preview-emails.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

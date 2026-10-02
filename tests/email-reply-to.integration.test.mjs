@@ -18,6 +18,9 @@ mock.module("resend", {
 });
 mock.module(new URL("../lib/store.ts", import.meta.url).href, {
   namedExports: {
+    ensureSchema: async () => {},
+    findUserById: async () => null,
+    requirePool: () => { throw new Error("Unexpected outbox access in direct email test"); },
     hasNotificationDelivery: async () => alreadyDelivered,
     recordNotificationDelivery: async (delivery) => deliveries.push(delivery)
   }

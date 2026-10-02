@@ -1,3 +1,4 @@
+import { EMAIL_OUTBOX_SCHEMA } from "@/lib/email-outbox-schema";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { RETURNS_SCHEMA } from "@/lib/returns-schema";
@@ -721,6 +722,7 @@ async function initSchema() {
 
   await client.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
   await client.query(RETURNS_SCHEMA);
+  await client.query(EMAIL_OUTBOX_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -730,7 +732,7 @@ async function initSchema() {
   );
 }
 
-async function ensureSchema() {
+export async function ensureSchema() {
   if (!databaseConfigured) {
     return;
   }
