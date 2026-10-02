@@ -74,12 +74,17 @@ controlled test messages and check Gmail, Outlook, and mobile inboxes.
 2. Set server-only RESEND_API_KEY and EMAIL_FROM. Existing EMAIL_FROM_* category
    overrides and EMAIL_REPLY_TO / EMAIL_REPLY_TO_SUPPORT remain supported.
 3. Set NEXT_PUBLIC_APP_URL=https://www.tailorgraph.com so links and logos are absolute.
-4. Set a strong CRON_SECRET and run npm run db:migrate before deploying this code
-   (schema version 36 adds email_outbox).
-5. The new /api/cron/email worker is scheduled every five minutes in vercel.json.
-   This requires a Vercel plan supporting subdaily cron, or an equivalent external
-   scheduler sending Authorization: Bearer <CRON_SECRET>. Do not downgrade it to a
-   daily schedule: delayed messages and retry timing depend on frequent runs.
+4. The production build applies an additive, transactional email_outbox migration
+   (schema version 36) before promotion. Existing schema version 35 is required.
+   Local/preview builds skip it; full installations still use npm run db:migrate.
+5. .github/workflows/email-worker.yml invokes /api/cron/email every five minutes
+   on main, with manual dispatch for verification. GitHub schedules are best-effort:
+   delayed runs can delay message emails/retries, and public repositories disable
+   scheduled workflows after 60 days of inactivity. Re-enable it if that happens.
+   The endpoint verifies GitHub's signed, short-lived OIDC token, audience, immutable
+   repository/owner IDs, main branch, workflow path, and schedule/manual event.
+   It needs no shared GitHub secret. Existing CRON_SECRET authentication remains
+   available for operator calls; the daily Vercel returns schedule is unchanged.
 6. Check worker counts and pending/failed jobs. Missing email configuration returns
    HTTP 503 from the worker; it does not discard queued events.
 
