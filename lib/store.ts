@@ -1,3 +1,4 @@
+import { NOTIFICATION_SCHEMA } from "@/lib/notification-schema";
 import { EMAIL_OUTBOX_SCHEMA } from "@/lib/email-outbox-schema";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -145,6 +146,7 @@ function normalizeNotificationPreferences(value: unknown): User["notificationPre
       : ((value as Partial<User["notificationPreferences"]> | null) ?? {});
 
   return {
+    emailFrequency: raw.emailFrequency ?? {},
     messagesEmail: raw.messagesEmail ?? defaultNotificationPreferences.messagesEmail,
     fitEmail: raw.fitEmail ?? defaultNotificationPreferences.fitEmail,
     savedSearchEmail: raw.savedSearchEmail ?? defaultNotificationPreferences.savedSearchEmail,
@@ -723,6 +725,7 @@ async function initSchema() {
   await client.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
   await client.query(RETURNS_SCHEMA);
   await client.query(EMAIL_OUTBOX_SCHEMA);
+  await client.query(NOTIFICATION_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -1102,6 +1105,9 @@ function mapOffer(row: Record<string, unknown>): Offer {
     listingTitle: String(row.listing_title ?? ""),
     listingPrice: Number(row.listing_price ?? 0),
     amount: Number(row.amount),
+    expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : undefined,
+    lastActorId: String(row.last_actor_id ?? row.buyer_id),
+    revision: Number(row.revision ?? 0),
     status: (String(row.status) as OfferStatus) || "active",
     message: row.message ? String(row.message) : null,
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -1872,6 +1878,9 @@ export async function updateNotificationPreferences(
     JSON.stringify(notificationPreferences),
     userId
   ]);
+  await requirePool().query(`UPDATE email_digest_items SET available_at=NOW() WHERE recipient_id=$1 AND processed_at IS NULL
+    AND (COALESCE(($2::jsonb->>preference_key)::boolean,false)=false OR
+      COALESCE($2::jsonb->'emailFrequency'->>preference_key,'instant')<>payload->>'digestFrequency')`,[userId,JSON.stringify(notificationPreferences)]);
 }
 
 export async function createPasswordResetToken(
@@ -3005,8 +3014,8 @@ export async function createOffer(input: {
   const id = randomUUID();
   const result = await client.query(
     `INSERT INTO offers (
-       id, buyer_id, seller_id, listing_id, amount, status, message, created_at, updated_at
-     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW(), NOW())
+       id, buyer_id, seller_id, listing_id, amount, status, message, created_at, updated_at, expires_at,last_actor_id
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW(), NOW(),NOW()+INTERVAL '7 days',$2)
      RETURNING *`,
     [id, input.buyerId, input.sellerId, input.listingId, input.amount, input.message]
   );

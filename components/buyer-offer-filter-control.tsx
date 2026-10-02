@@ -17,8 +17,10 @@ export function BuyerOfferFilterControl({
         >
           <option value="all">All</option>
           <option value="active">Active</option>
+          <option value="countered">Countered</option>
           <option value="accepted">Accepted</option>
           <option value="rejected">Rejected</option>
+          <option value="expired">Expired</option>
         </select>
       </label>
     </form>

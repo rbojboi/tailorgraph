@@ -37,7 +37,7 @@ import {
   vintageEraOptions,
   waistcoatLapelOptions,
   yesNoAnyOptions
-} from "@/app/marketplace/page";
+} from "@/lib/marketplace-search";
 import { MarketplaceFilterSidebar } from "@/components/marketplace-filter-sidebar";
 import { MarketplaceSortControl } from "@/components/marketplace-sort-control";
 import { AppShell, PageWrap } from "@/components/ui";

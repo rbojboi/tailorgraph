@@ -1,3 +1,4 @@
+import { OfferResponse } from "@/components/offer-response";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BuyerOfferActionsMenu } from "@/components/buyer-offer-actions-menu";
@@ -16,12 +17,12 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function getOfferTimeRemainingLabel(offer: { status: OfferStatus; createdAt: string }) {
-  if (offer.status !== "active") {
+function getOfferTimeRemainingLabel(offer: { status: OfferStatus; createdAt: string; expiresAt?: string }) {
+  if (!["active","countered","accepted"].includes(offer.status)) {
     return "Closed";
   }
 
-  const expiresAt = new Date(new Date(offer.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(offer.expiresAt ?? new Date(new Date(offer.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000));
   const remainingMs = expiresAt.getTime() - Date.now();
 
   if (remainingMs <= 0) {
@@ -47,7 +48,7 @@ export default async function BuyerOffersPage({
 
   const requestedOfferStatus = firstValue(params.offerStatus) as BuyerOfferFilter | undefined;
   const selectedOfferStatus: BuyerOfferFilter =
-    requestedOfferStatus && ["all", "active", "accepted", "rejected"].includes(requestedOfferStatus)
+    requestedOfferStatus && ["all", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
       ? requestedOfferStatus
       : "all";
   const offers = await listBuyerOffers(user.id, selectedOfferStatus);
@@ -55,6 +56,7 @@ export default async function BuyerOffersPage({
   return (
     <AppShell>
       <PageWrap>
+        {firstValue(params.offerNotice) ? <p role="status" className="rounded-xl bg-stone-100 p-4">{firstValue(params.offerNotice)}</p> : null}
         <BuyerSubpageHeader
           eyebrow="Buyer Dashboard"
           title="My Offers"
@@ -99,6 +101,7 @@ export default async function BuyerOffersPage({
                     <Spec label="Time Remaining" value={getOfferTimeRemainingLabel(offer)} />
                     <Spec label="Listed Price" value={formatCurrency(offer.listingPrice)} />
                   </div>
+                      <OfferResponse offer={offer} userId={user.id}/>
                 </article>
               ))
             ) : (

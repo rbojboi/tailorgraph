@@ -76,6 +76,7 @@ export type BuyerProfile = {
 };
 
 export type NotificationPreferences = {
+  emailFrequency?: Partial<Record<import("./notification-preferences").OptionalEmailKey, import("./notification-preferences").EmailFrequency>>;
   messagesEmail: boolean;
   fitEmail: boolean;
   savedSearchEmail: boolean;
@@ -220,7 +221,7 @@ export type OrderStatus =
   | "refunded"
   | "failed";
 
-export type OfferStatus = "active" | "accepted" | "rejected";
+export type OfferStatus = "active" | "countered" | "accepted" | "rejected" | "expired";
 export type ReturnPolicy = "no_returns" | "seller_approval" | "automatic_returns";
 
 export type SupportRequestKind = "support" | "dispute";
@@ -561,6 +562,9 @@ export type SellerReviewScores = {
 };
 
 export type Offer = {
+  expiresAt?: string;
+  lastActorId?: string;
+  revision?: number;
   id: string;
   buyerId: string;
   buyerUsername: string;

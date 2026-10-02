@@ -1,3 +1,4 @@
+import { emailFrequency } from "@/lib/notification-preferences";
 import { redirect } from "next/navigation";
 import { updateNotificationPreferencesAction } from "@/app/actions";
 import { AppShell, PageWrap, SectionTitle } from "@/components/ui";
@@ -19,7 +20,7 @@ const optionalEmailPreferences = [
   {
     key: "fitEmail",
     title: "Fit Feed",
-    description: "New marketplace items that fit your measurements."
+    description: "Reserved for future Fit Feed emails. To get matches now, save a search with your fit filters."
   },
   {
     key: "savedSearchEmail",
@@ -34,17 +35,17 @@ const optionalEmailPreferences = [
   {
     key: "savedItemEmail",
     title: "Saved Items",
-    description: "Updates about items you are watching closely."
+    description: "Price drops on items you have saved."
   },
   {
     key: "offerAndPriceDropEmail",
-    title: "Offers and Price Drops",
-    description: "Offer activity, discounts, and marketplace-wide price reductions."
+    title: "Offers",
+    description: "New offers, counteroffers, decisions, and expiry reminders."
   },
   {
     key: "sellerActivityEmail",
     title: "Seller Activity",
-    description: "Seller-side performance and activity emails."
+    description: "Preference for future seller performance summaries. Essential sale and shipping emails stay on."
   },
   {
     key: "helloEmail",
@@ -99,7 +100,7 @@ export default async function AccountNotificationsPage({
             <SectionTitle
               eyebrow="Email"
               title="Optional email alerts"
-              description="These are the categories you can turn on and off yourself."
+              description="Choose instant alerts or a digest. Daily digests arrive after 09:00 UTC; weekly digests after 09:00 UTC on Mondays. Delivery times can vary."
             />
 
             <form action={updateNotificationPreferencesAction} className="mt-6 grid gap-4">
@@ -112,12 +113,9 @@ export default async function AccountNotificationsPage({
                     <p className="text-sm font-semibold text-stone-950">{preference.title}</p>
                     <p className="mt-1 text-sm leading-6 text-stone-700">{preference.description}</p>
                   </div>
-                  <input
-                    type="checkbox"
-                    name={preference.key}
-                    defaultChecked={user.notificationPreferences[preference.key]}
-                    className="mt-1 h-5 w-5 rounded border-stone-300 text-[var(--accent)]"
-                  />
+                  <select name={preference.key} defaultValue={emailFrequency(user.notificationPreferences, preference.key)} className="rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm">
+                    <option value="instant">Instant</option><option value="daily">Daily digest</option><option value="weekly">Weekly digest</option><option value="off">Off</option>
+                  </select>
                 </label>
               ))}
 

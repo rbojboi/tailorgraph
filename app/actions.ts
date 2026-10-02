@@ -1,4 +1,6 @@
 "use server";
+import { optionalEmailKeys, type EmailFrequency } from "@/lib/notification-preferences";
+import { applyAcceptedOfferPrices } from "@/lib/offers";
 
 import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -86,7 +88,6 @@ import {
   EMAIL_SENDER_TEST_CATEGORIES,
   type EmailSenderCategory,
   sendDirectMessageNotification,
-  sendOfferReceivedNotification,
   sendEmailVerificationNotification,
   sendBuyerReturnLabelNotification,
   sendNewListingFollowerNotification,
@@ -2320,18 +2321,14 @@ export async function updateNotificationPreferencesAction(formData: FormData) {
     redirect("/login?authError=Please+log+in+to+manage+notification+preferences");
   }
 
-  await updateNotificationPreferences(user.id, {
-    messagesEmail: formData.get("messagesEmail") === "on",
-    fitEmail: formData.get("fitEmail") === "on",
-    savedSearchEmail: formData.get("savedSearchEmail") === "on",
-    savedSellerEmail: formData.get("savedSellerEmail") === "on",
-    savedItemEmail: formData.get("savedItemEmail") === "on",
-    offerAndPriceDropEmail: formData.get("offerAndPriceDropEmail") === "on",
-    sellerActivityEmail: formData.get("sellerActivityEmail") === "on",
-    helloEmail: formData.get("helloEmail") === "on",
-    updatesEmail: formData.get("updatesEmail") === "on",
-    shipmentSms: formData.get("shipmentSms") === "on"
-  });
+  const preferences = { ...user.notificationPreferences, emailFrequency: { ...user.notificationPreferences.emailFrequency }, shipmentSms: formData.get("shipmentSms") === "on" };
+  for (const key of optionalEmailKeys) {
+    const value = formData.get(key);
+    if (typeof value !== "string" || !["instant","daily","weekly","off"].includes(value)) continue;
+    preferences[key] = value !== "off";
+    preferences.emailFrequency[key] = value as EmailFrequency;
+  }
+  await updateNotificationPreferences(user.id, preferences);
 
   revalidatePath("/account");
   revalidatePath("/account/notifications");
@@ -3153,7 +3150,8 @@ export async function startStripeCheckoutAction(formData: FormData) {
   }
 
   const listingId = stringValue(formData, "listingId");
-  const listing = await findListingById(listingId);
+  const foundListing = await findListingById(listingId);
+  const listing = foundListing ? (await applyAcceptedOfferPrices([foundListing],user.id))[0] : null;
 
   if (!listing || listing.status !== "active") {
     redirect("/cart?checkoutError=Listing+is+no+longer+available");
@@ -3283,9 +3281,9 @@ export async function startCartStripeCheckoutAction(formData: FormData) {
     redirect("/cart?checkoutError=Your+cart+is+empty");
   }
 
-  const listings = (await Promise.all(listingIds.map((listingId) => findListingById(listingId)))).filter(
+  const listings = await applyAcceptedOfferPrices((await Promise.all(listingIds.map((listingId) => findListingById(listingId)))).filter(
     (listing): listing is NonNullable<typeof listing> => Boolean(listing)
-  );
+  ),user.id);
 
   if (!listings.length) {
     redirect("/cart?checkoutError=Your+cart+is+empty");
@@ -4162,7 +4160,7 @@ export async function makeOfferAction(formData: FormData) {
     redirect(`/listings/${listing.id}?intent=offer&authError=${encodeURIComponent(bodyError)}`);
   }
 
-  const offer = await createOffer({
+  await createOffer({
     buyerId: user.id,
     sellerId: listing.sellerId,
     listingId: listing.id,
@@ -4172,8 +4170,8 @@ export async function makeOfferAction(formData: FormData) {
 
   revalidatePath("/buyer");
   revalidatePath(`/listings/${listing.id}`);
-  const seller = await findUserById(listing.sellerId);
-  if (seller) await sendOfferReceivedNotification(offer, seller);
+  revalidatePath("/seller");
+  revalidatePath("/buyer/offers");
   redirect("/buyer?saved=offer");
 }
 

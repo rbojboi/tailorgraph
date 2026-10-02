@@ -7,7 +7,7 @@
     "email:preview": "node --import ./scripts/register-ts-alias-loader.mjs scripts/preview-emails.mjs --serve",
     "email:render": "node --import ./scripts/register-ts-alias-loader.mjs scripts/preview-emails.mjs",
     "dev": "next dev",
-    "build": "node --import ./scripts/register-ts-alias-loader.mjs scripts/migrate-email-outbox.ts && next build",
+    "build": "node --import ./scripts/register-ts-alias-loader.mjs scripts/migrate-email-outbox.ts && node --import ./scripts/register-ts-alias-loader.mjs scripts/migrate-notifications.ts && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit --incremental false",
     "lint": "eslint .",

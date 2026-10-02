@@ -1,3 +1,8 @@
+import { deferToDigest } from "./email-digests";
+import { trackEmail } from "./email-monitor";
+import { emailFrequency } from "./notification-preferences";
+import { renderEmailTemplate } from "./email-template";
+import { getAppUrl } from "./stripe";
 import { randomUUID } from "node:crypto";
 import { ensureSchema, findUserById, requirePool } from "@/lib/store";
 import type { EmailInput } from "@/lib/notifications";
@@ -5,6 +10,8 @@ import type { EmailInput } from "@/lib/notifications";
 
 export async function enqueueEmail(input: EmailInput) {
   await ensureSchema();
+  if (await deferToDigest(input)) return;
+  await trackEmail(input,"queued");
   await requirePool().query(
     `INSERT INTO email_outbox(event_key,payload,available_at) VALUES($1,$2::jsonb,NOW()+($3 * INTERVAL '1 second'))
      ON CONFLICT(event_key) DO NOTHING`,
@@ -20,12 +27,12 @@ type Job = {
   lease_token: string;
 };
 
-async function shouldSkip(input: EmailInput) {
+export async function shouldSkipEmail(input: EmailInput) {
   if (input.recipientUserId) {
     const user = await findUserById(input.recipientUserId);
     // Never send an old account's queued content after its email address changes.
     if (!user || user.email.toLowerCase() !== input.to.toLowerCase()) return true;
-    if (input.preferenceKey && !user.notificationPreferences[input.preferenceKey]) return true;
+    if (input.preferenceKey && emailFrequency(user.notificationPreferences,input.preferenceKey)==="off") return true;
   }
   if (input.messageId && input.recipientUserId) {
     const result = await requirePool().query<{ unread: boolean }>(
@@ -38,6 +45,16 @@ async function shouldSkip(input: EmailInput) {
       [input.messageId, input.recipientUserId]
     );
     if (!result.rows[0]?.unread) return true;
+  }
+  if (input.requireUnshipped && input.orderId) {
+    const result=await requirePool().query("SELECT 1 FROM orders WHERE id=$1 AND status IN ('paid','processing') AND shipped_at IS NULL",[input.orderId]);
+    if (!result.rows.length) return true;
+  }
+  if (input.listingId) {
+    const result=await requirePool().query("SELECT price FROM listings WHERE id=$1 AND status='active'",[input.listingId]);
+    if (!result.rows.length || (input.maximumPrice!==undefined && Number(result.rows[0].price)>input.maximumPrice)) return true;
+    if (input.requireSavedItem && !(await requirePool().query("SELECT 1 FROM user_saved_listings WHERE user_id=$1 AND listing_id=$2",[input.recipientUserId,input.listingId])).rows.length) return true;
+    if (input.savedSearchId && !(await requirePool().query("SELECT 1 FROM user_saved_searches WHERE id=$1 AND user_id=$2",[input.savedSearchId,input.recipientUserId])).rows.length) return true;
   }
   return false;
 }
@@ -69,10 +86,20 @@ export async function drainEmailOutbox(send: (input: EmailInput) => Promise<void
       if (Date.now() - new Date(job.first_attempt_at).getTime() >= 23 * 60 * 60 * 1000) {
         // Resend only remembers keys for 24 hours. Require review instead of risking a duplicate.
         await db.query("UPDATE email_outbox SET status='failed',last_error='Idempotency window expired; review provider delivery before retrying',leased_until=NULL WHERE event_key=$1 AND lease_token=$2", [job.event_key, lease]);
+        await trackEmail(job.payload,"failed",undefined,"Idempotency window expired");
         counts.failed++;
         continue;
       }
-      const skipped = await shouldSkip(job.payload);
+      if (job.payload.digestItems && job.attempts===1) {
+        const items:EmailInput[]=[];
+        for (const item of job.payload.digestItems) if (!await shouldSkipEmail(item)) items.push(item);
+        job.payload.digestItems=items;
+        job.payload.text=items.map(item=>`${item.subject}\n${item.text}`).join("\n\n");
+        job.payload.html=renderEmailTemplate({title:"Your TailorGraph updates",optional:true,details:items.map(item=>({label:item.subject,value:item.text})),primaryAction:{label:"Visit TailorGraph",url:getAppUrl()}},getAppUrl());
+        await db.query("UPDATE email_outbox SET payload=$3::jsonb WHERE event_key=$1 AND lease_token=$2",[job.event_key,lease,JSON.stringify(job.payload)]);
+      }
+      const skipped = (job.payload.digestItems?.length===0) || await shouldSkipEmail(job.payload) || (job.attempts===1 && await deferToDigest(job.payload));
+      if (skipped) await trackEmail(job.payload,"skipped");
       if (!skipped) await send(job.payload);
       await db.query(
         "UPDATE email_outbox SET status=$3,payload=NULL,completed_at=NOW(),leased_until=NULL,last_error=NULL WHERE event_key=$1 AND lease_token=$2",
@@ -82,6 +109,7 @@ export async function drainEmailOutbox(send: (input: EmailInput) => Promise<void
     } catch (error) {
       const permanent = error instanceof EmailDeliveryError && !error.retryable;
       const failed = permanent || job.attempts >= 10;
+      await trackEmail(job.payload,failed?"failed":"retrying",undefined,error instanceof EmailDeliveryError?error.code:"delivery_or_storage_error");
       // Store only an error class, never provider messages that may echo recipient/content.
       await db.query(
         `UPDATE email_outbox SET status=$3,leased_until=NULL,last_error=$4,

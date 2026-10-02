@@ -1,3 +1,4 @@
+import { applyAcceptedOfferPrices } from "@/lib/offers";
 import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -69,7 +70,7 @@ export default async function CheckoutPage({
   const requestedSellerId = firstValue(params.sellerId);
   const cartIds = await getCartIds();
   const marketplace = await listMarketplace();
-  const cartListings = marketplace.filter((listing) => cartIds.includes(listing.id) && listing.status === "active");
+  const cartListings = await applyAcceptedOfferPrices(marketplace.filter((listing) => cartIds.includes(listing.id) && listing.status === "active"),user?.id);
 
   if (!cartListings.length) {
     redirect("/cart");

@@ -11,7 +11,7 @@ import { MarketplaceRangeField } from "@/components/marketplace-range-field";
 import { SearchableChecklistFilter } from "@/components/searchable-checklist-filter";
 import { MarketplaceTrousersFilters } from "@/components/marketplace-trousers-filters";
 import { getMarketplaceSizeFilterConfig } from "@/lib/sizing";
-import type { MarketplaceFitMode } from "@/app/marketplace/page";
+import type { MarketplaceFitMode } from "@/lib/marketplace-search";
 import type { BuyerProfile } from "@/lib/types";
 
 function formatRange(value: number, halfSpread = 0.25) {
