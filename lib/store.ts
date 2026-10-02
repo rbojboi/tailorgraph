@@ -1,6 +1,8 @@
+import { NOTIFICATION_SCHEMA } from "@/lib/notification-schema";
+import { COMMERCE_SCHEMA } from "@/lib/commerce-schema";
 import { EMAIL_OUTBOX_SCHEMA } from "@/lib/email-outbox-schema";
 import { randomUUID } from "node:crypto";
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 import { RETURNS_SCHEMA } from "@/lib/returns-schema";
 import {
   CURRENT_SCHEMA_VERSION,
@@ -145,6 +147,7 @@ function normalizeNotificationPreferences(value: unknown): User["notificationPre
       : ((value as Partial<User["notificationPreferences"]> | null) ?? {});
 
   return {
+    emailFrequency: raw.emailFrequency ?? {},
     messagesEmail: raw.messagesEmail ?? defaultNotificationPreferences.messagesEmail,
     fitEmail: raw.fitEmail ?? defaultNotificationPreferences.fitEmail,
     savedSearchEmail: raw.savedSearchEmail ?? defaultNotificationPreferences.savedSearchEmail,
@@ -723,6 +726,8 @@ async function initSchema() {
   await client.query("CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users (username)");
   await client.query(RETURNS_SCHEMA);
   await client.query(EMAIL_OUTBOX_SCHEMA);
+  await client.query(NOTIFICATION_SCHEMA);
+  await client.query(COMMERCE_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -1093,6 +1098,9 @@ function mapOrderReview(row: Record<string, unknown>): OrderReview {
 
 function mapOffer(row: Record<string, unknown>): Offer {
   return {
+    autoCharge: Boolean(row.auto_charge),
+    paymentState: row.payment_state ? String(row.payment_state) : undefined,
+    paidOrderId: row.paid_order_id ? String(row.paid_order_id) : undefined,
     id: String(row.id),
     buyerId: String(row.buyer_id),
     buyerUsername: String(row.buyer_username ?? ""),
@@ -1102,6 +1110,9 @@ function mapOffer(row: Record<string, unknown>): Offer {
     listingTitle: String(row.listing_title ?? ""),
     listingPrice: Number(row.listing_price ?? 0),
     amount: Number(row.amount),
+    expiresAt: row.expires_at ? new Date(String(row.expires_at)).toISOString() : undefined,
+    lastActorId: String(row.last_actor_id ?? row.buyer_id),
+    revision: Number(row.revision ?? 0),
     status: (String(row.status) as OfferStatus) || "active",
     message: row.message ? String(row.message) : null,
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -1872,6 +1883,9 @@ export async function updateNotificationPreferences(
     JSON.stringify(notificationPreferences),
     userId
   ]);
+  await requirePool().query(`UPDATE email_digest_items SET available_at=NOW() WHERE recipient_id=$1 AND processed_at IS NULL
+    AND (COALESCE(($2::jsonb->>preference_key)::boolean,false)=false OR
+      COALESCE($2::jsonb->'emailFrequency'->>preference_key,'instant')<>payload->>'digestFrequency')`,[userId,JSON.stringify(notificationPreferences)]);
 }
 
 export async function createPasswordResetToken(
@@ -2307,10 +2321,11 @@ export async function createOrder(
     | "returnProviderRateId"
     | "returnProviderTransactionId"
     | "returnStatus"
-  >
+  >,
+  transaction?: PoolClient
 ): Promise<Order> {
   await ensureSchema();
-  const client = requirePool();
+  const client = transaction ?? requirePool();
   const id = randomUUID();
   const result = await client.query(
     `INSERT INTO orders (
@@ -2984,7 +2999,7 @@ export async function listSellerOffers(userId: string, status: OfferStatus | "al
        INNER JOIN users AS buyer ON buyer.id = offers.buyer_id
        INNER JOIN users AS seller ON seller.id = offers.seller_id
        INNER JOIN listings ON listings.id = offers.listing_id
-      WHERE offers.seller_id = $1
+      WHERE offers.seller_id = $1 AND offers.status <> 'draft'
         AND ($2::text = 'all' OR offers.status = $2)
       ORDER BY offers.updated_at DESC, offers.created_at DESC`,
     [userId, status]
@@ -3005,8 +3020,8 @@ export async function createOffer(input: {
   const id = randomUUID();
   const result = await client.query(
     `INSERT INTO offers (
-       id, buyer_id, seller_id, listing_id, amount, status, message, created_at, updated_at
-     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW(), NOW())
+       id, buyer_id, seller_id, listing_id, amount, status, message, created_at, updated_at, expires_at,last_actor_id
+     ) VALUES ($1, $2, $3, $4, $5, 'active', $6, NOW(), NOW(),NOW()+INTERVAL '7 days',$2)
      RETURNING *`,
     [id, input.buyerId, input.sellerId, input.listingId, input.amount, input.message]
   );

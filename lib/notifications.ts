@@ -1,3 +1,7 @@
+import { trackEmail, recipientSuppressed, refreshEmailDeliveryStatuses } from "./email-monitor";
+import { unsubscribeToken } from "./email-unsubscribe";
+import { emailFrequency, type OptionalEmailKey } from "./notification-preferences";
+import { requirePool, ensureSchema } from "./store";
 import { createHash } from "node:crypto";
 import { renderEmailTemplate, type EmailLayoutInput } from "@/lib/email-template";
 import { enqueueEmail, drainEmailOutbox, EmailDeliveryError } from "@/lib/email-outbox";
@@ -14,7 +18,18 @@ let twilioClient: ReturnType<typeof twilio> | null = null;
 export type EmailInput = {
   durable?: boolean;
   recipientUserId?: string;
-  preferenceKey?: keyof User["notificationPreferences"];
+  preferenceKey?: OptionalEmailKey;
+  digest?: boolean;
+  digestFrequency?: "daily" | "weekly";
+  digestItems?: EmailInput[];
+  listingId?: string;
+  savedSearchId?: string;
+  requireSavedItem?: boolean;
+  maximumPrice?: number;
+  orderId?: string;
+  offerId?: string;
+  offerPaymentState?: string;
+  requireUnshipped?: boolean;
   messageId?: string;
   eventKey: string;
   eventType: string;
@@ -311,9 +326,9 @@ export function normalizeSmsNumber(value: string) {
 
 function shouldSendOptionalEmail(
   user: Pick<User, "notificationPreferences">,
-  preferenceKey: keyof User["notificationPreferences"]
+  preferenceKey: OptionalEmailKey
 ) {
-  return Boolean(user.notificationPreferences[preferenceKey]);
+  return emailFrequency(user.notificationPreferences, preferenceKey) !== "off";
 }
 
 async function sendEmailNotification(input: EmailInput) {
@@ -329,7 +344,28 @@ async function sendEmailNotification(input: EmailInput) {
 
 export async function deliverPendingEmails() {
   if (!isEmailNotificationConfigured()) return { configured: false, sent: 0, skipped: 0, retried: 0, failed: 0 };
-  return { configured: true, ...await drainEmailOutbox(deliverEmailNotification) };
+  const { flushEmailDigests } = await import("./email-digests");
+  const { processNotificationEvents, queueShippingReminders } = await import("./notification-events");
+  const { expireOffers } = await import("./offers");
+  await ensureSchema();
+  const client=await requirePool().connect();
+  let committed=false;
+  try {
+    // A transaction-scoped lock also works with transaction-pooling database proxies.
+    await client.query("BEGIN");
+    const lock=await client.query("SELECT pg_try_advisory_xact_lock(1208224399,37) AS locked");
+    if (!lock.rows[0].locked) return {configured:true,busy:true};
+    await expireOffers();
+    await processNotificationEvents();
+    await queueShippingReminders();
+    await flushEmailDigests();
+    const result=await drainEmailOutbox(deliverEmailNotification);
+    await refreshEmailDeliveryStatuses();
+    await client.query("INSERT INTO email_worker_health(id,last_success_at) VALUES(1,NOW()) ON CONFLICT(id) DO UPDATE SET last_success_at=NOW()");
+    await client.query("COMMIT");
+    committed=true;
+    return {configured:true,...result};
+  } finally { try { if (!committed) await client.query("ROLLBACK"); } finally { client.release(); } }
 }
 
 async function deliverEmailNotification(input: EmailInput) {
@@ -346,24 +382,40 @@ async function deliverEmailNotification(input: EmailInput) {
     return;
   }
 
+  if (await recipientSuppressed(recipient)) { await trackEmail(input,"suppressed");return; }
+  let html=input.html;let text=input.text;
+  let headers:Record<string,string>|undefined;
+  if (input.preferenceKey && input.recipientUserId) {
+    const token=encodeURIComponent(unsubscribeToken(input.recipientUserId,input.to,input.preferenceKey));
+    const url=`${getAppUrl()}/email/unsubscribe?token=${token}`;
+    html=html.replace("</body>",`<p style="text-align:center;font:12px Arial;color:#6e6258"><a href="${url}">Unsubscribe from this category</a></p></body>`);
+    text+=`\n\nUnsubscribe from this category: ${url}`;
+    headers={"List-Unsubscribe":`<${getAppUrl()}/api/email/unsubscribe?token=${token}>`,"List-Unsubscribe-Post":"List-Unsubscribe=One-Click"};
+  }
   const category = input.category ?? "no_reply";
   const from = input.fromOverride || getEmailSenderForCategory(category);
   const emailReplyTo = input.replyToOverride ?? getReplyToForCategory(category, from);
-
+  await trackEmail(input,"sending");
   const result = await getResendClient().emails.send({
     from,
     to: [recipient],
     replyTo: emailReplyTo,
     subject: input.subject,
-    html: input.html,
-    text: input.text
-  }, input.skipDedupe ? undefined : { idempotencyKey: input.eventKey });
+    html,
+    text,
+    headers
+  }, input.skipDedupe ? undefined : { idempotencyKey: input.eventKey }).catch(async error=>{
+    await trackEmail(input,"failed",undefined,"provider_connection_error");
+    throw error;
+  });
   if (result.error) {
+    await trackEmail(input,"failed",undefined,result.error.name);
     const status = result.error.statusCode;
     throw new EmailDeliveryError(result.error.name, !status || status === 429 || status >= 500 || result.error.name === "concurrent_idempotent_requests");
   }
   if (!result.data?.id) throw new EmailDeliveryError("missing_provider_receipt", true);
 
+  await trackEmail(input,"sent",result.data.id);
   if (!input.skipDedupe) {
     await recordNotificationDelivery({
       eventKey: input.eventKey,

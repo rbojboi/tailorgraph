@@ -1,11 +1,15 @@
 import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
+import {notFound,redirect} from "next/navigation";
+import {getCurrentUser} from "@/lib/auth";
+import {handleCommerceSession} from "@/lib/commerce-payments";
 import { ClearPurchasedCartItems } from "@/components/clear-purchased-cart-items";
 import { formatCurrency, formatDisplayValue, formatSizeLabel } from "@/lib/display";
 import { getStripe, isStripeConfigured } from "@/lib/stripe";
 import { openIssueAction } from "@/app/actions";
 import {
   findListingById,
+  requirePool,
   listOrdersByStripeCheckoutSessionId,
   markOrderPaidBySessionId
 } from "@/lib/store";
@@ -69,6 +73,8 @@ export default async function CheckoutSuccessPage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+  const user=await getCurrentUser();
+  if(!user) redirect("/login");
   const sessionId = firstValue(params.session_id);
   const saved = firstValue(params.saved);
   let purchasedListingIds: string[] = [];
@@ -77,17 +83,26 @@ export default async function CheckoutSuccessPage({
   if (sessionId && isStripeConfigured()) {
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const orders = await listOrdersByStripeCheckoutSessionId(sessionId);
-    purchasedOrders = orders;
-
-    if (orders.length && session.payment_status === "paid") {
-      purchasedListingIds = orders.map((order) => order.listingId);
-      await markOrderPaidBySessionId(
-        sessionId,
-        typeof session.payment_intent === "string" ? session.payment_intent : null
-      );
+    if(session.metadata?.paymentAttempt) {
+      const owner=await requirePool().query("SELECT buyer_id FROM commerce_payments WHERE id=$1",[session.metadata.paymentAttempt]);
+      if(owner.rows[0]?.buyer_id!==user.id) notFound();
+      try {await handleCommerceSession(session);} catch { /* The webhook and worker safely reconcile payment. */ }
+    } else {
+      const orders=await listOrdersByStripeCheckoutSessionId(sessionId);
+      if(!orders.length || orders.some(order=>order.buyerId!==user.id)) notFound();
+      if(session.payment_status==="paid") await markOrderPaidBySessionId(sessionId,typeof session.payment_intent==="string"?session.payment_intent:null);
     }
+    purchasedOrders=await listOrdersByStripeCheckoutSessionId(sessionId);
+    if(purchasedOrders.some(order=>order.buyerId!==user.id)) notFound();
+    purchasedOrders=purchasedOrders.filter(order=>!["pending_payment","failed","canceled"].includes(order.status));
+    purchasedListingIds=purchasedOrders.map(order=>order.listingId);
   }
+
+  if(!purchasedOrders.length) return <main className="grain px-4 py-10"><section className="panel mx-auto max-w-3xl rounded-3xl p-8">
+    <h1 className="text-3xl font-semibold">Checking your payment</h1>
+    <p className="my-4">Your purchase is confirmed only after payment succeeds. Check My Purchases for the latest status.</p>
+    <Link className="underline" href="/buyer/orders">View My Purchases</Link>
+  </section></main>;
 
   const purchasedItems = await Promise.all(
     purchasedOrders.map(async (order) => {

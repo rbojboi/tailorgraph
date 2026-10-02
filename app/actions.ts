@@ -1,4 +1,8 @@
 "use server";
+import { createBindingOffer } from "@/lib/offer-authorization";
+import { startMarketplaceCheckout } from "@/lib/commerce-payments";
+import { optionalEmailKeys, type EmailFrequency } from "@/lib/notification-preferences";
+import { applyAcceptedOfferPrices } from "@/lib/offers";
 
 import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -15,11 +19,8 @@ import {
 import { formatDisplayValue } from "@/lib/display";
 import { getAppUrl, getStripe, isStripeConfigured } from "@/lib/stripe";
 import {
-  attachStripeSessionToOrder,
   createDispute,
   createListing,
-  createOffer,
-  createOrder,
   countAdminUsers,
   createEmailVerificationToken,
   createPasswordResetToken,
@@ -56,7 +57,6 @@ import {
   markOrderDelivered,
   markUserStripeOnboardingComplete,
   reopenListing,
-  reserveListing,
   restoreMessageThreadForUser,
   saveOrderReview,
   saveListingForUser,
@@ -86,7 +86,6 @@ import {
   EMAIL_SENDER_TEST_CATEGORIES,
   type EmailSenderCategory,
   sendDirectMessageNotification,
-  sendOfferReceivedNotification,
   sendEmailVerificationNotification,
   sendBuyerReturnLabelNotification,
   sendNewListingFollowerNotification,
@@ -2320,18 +2319,14 @@ export async function updateNotificationPreferencesAction(formData: FormData) {
     redirect("/login?authError=Please+log+in+to+manage+notification+preferences");
   }
 
-  await updateNotificationPreferences(user.id, {
-    messagesEmail: formData.get("messagesEmail") === "on",
-    fitEmail: formData.get("fitEmail") === "on",
-    savedSearchEmail: formData.get("savedSearchEmail") === "on",
-    savedSellerEmail: formData.get("savedSellerEmail") === "on",
-    savedItemEmail: formData.get("savedItemEmail") === "on",
-    offerAndPriceDropEmail: formData.get("offerAndPriceDropEmail") === "on",
-    sellerActivityEmail: formData.get("sellerActivityEmail") === "on",
-    helloEmail: formData.get("helloEmail") === "on",
-    updatesEmail: formData.get("updatesEmail") === "on",
-    shipmentSms: formData.get("shipmentSms") === "on"
-  });
+  const preferences = { ...user.notificationPreferences, emailFrequency: { ...user.notificationPreferences.emailFrequency }, shipmentSms: formData.get("shipmentSms") === "on" };
+  for (const key of optionalEmailKeys) {
+    const value = formData.get(key);
+    if (typeof value !== "string" || !["instant","daily","weekly","off"].includes(value)) continue;
+    preferences[key] = value !== "off";
+    preferences.emailFrequency[key] = value as EmailFrequency;
+  }
+  await updateNotificationPreferences(user.id, preferences);
 
   revalidatePath("/account");
   revalidatePath("/account/notifications");
@@ -3140,275 +3135,28 @@ export async function checkoutAction(formData: FormData) {
   redirect("/cart?checkoutError=Payment+must+be+completed+through+Stripe+Checkout");
 }
 
-export async function startStripeCheckoutAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/cart?checkoutError=Add+DATABASE_URL+to+enable+checkout");
-  const user = await getCurrentUser();
-
-  if (!user || (user.role !== "buyer" && user.role !== "both")) {
-    redirect("/?authError=Buyer+account+required+to+checkout");
-  }
-
-  if (!isStripeConfigured()) {
-    redirect("/cart?checkoutError=Stripe+is+not+configured+yet.+Add+STRIPE_SECRET_KEY+first");
-  }
-
-  const listingId = stringValue(formData, "listingId");
-  const listing = await findListingById(listingId);
-
-  if (!listing || listing.status !== "active") {
-    redirect("/cart?checkoutError=Listing+is+no+longer+available");
-  }
-
-  if (listing.sellerId === user.id) {
-    redirect(`/cart?checkoutError=${encodeURIComponent("You may not purchase your own item.")}`);
-  }
-
-  const shippingAddress = await resolveCheckoutShippingAddress(formData, user);
-
-  const stripe = getStripe();
-  const seller = await findUserById(listing.sellerId);
-  const sellerPayoutReady = await isSellerPayoutReady(seller);
-  if (!sellerPayoutReady) {
-    redirect(`/cart?checkoutError=${encodeURIComponent("This seller needs to finish payout setup before checkout.")}`);
-  }
-
-  const destinationAccount = seller?.stripeAccountId ?? null;
-  const sellerTransferAmount = destinationAccount ? getSellerTransferAmountCents(listing.price) : undefined;
-  const shippingAmount = listing.shippingPrice;
-
-  const order = await createOrder({
-    buyerId: user.id,
-    buyerName: user.name,
-    sellerId: listing.sellerId,
-    sellerName: listing.sellerDisplayName,
-    listingId: listing.id,
-    listingTitle: listing.title,
-    amount: listing.price + shippingAmount,
-    subtotal: listing.price,
-    shippingAmount,
-    paymentMethod: "stripe_checkout",
-    status: "pending_payment",
-    listingStatus: listing.status,
-    returnsAccepted: listing.returnsAccepted,
-    returnPolicy: listing.returnPolicy,
-    stripeCheckoutSessionId: null,
-    stripePaymentIntentId: null,
-    shippingAddress,
-    shippingMethod: listing.shippingMethod,
-    carrier: null,
-    trackingNumber: null,
-    issueReason: null,
-    sellerNotes: null,
-    shippedAt: null,
-    deliveredAt: null
-  });
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    success_url: `${getAppUrl()}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${getAppUrl()}/cart?checkoutError=Checkout+was+canceled`,
-    customer_email: user.email,
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: Math.round(listing.price * 100),
-          product_data: {
-            name: listing.title,
-            description: `${listing.brand} - ${listing.material} - ${listing.pattern}`
-          }
-        }
-      },
-      ...(shippingAmount > 0
-        ? [
-            {
-              quantity: 1,
-              price_data: {
-                currency: "usd",
-                unit_amount: Math.round(shippingAmount * 100),
-                product_data: {
-                  name: "Shipping"
-                }
-              }
-            }
-          ]
-        : [])
-    ],
-    shipping_address_collection: {
-      allowed_countries: ["US", "CA"]
-    },
-      metadata: {
-        orderId: order.id,
-        listingId: listing.id
-      },
-      payment_intent_data:
-        destinationAccount && sellerTransferAmount
-          ? {
-            transfer_data: {
-              destination: destinationAccount,
-              amount: sellerTransferAmount
-            }
-          }
-          : undefined
-  });
-
-  await attachStripeSessionToOrder(order.id, session.id);
-
-  if (!session.url) {
-    redirect("/cart?checkoutError=Stripe+did+not+return+a+checkout+URL");
-  }
-
-  redirect(session.url);
+async function beginMarketplaceCheckout(formData:FormData, listingIds:string[]) {
+  redirectIfDatabaseUnavailable("/cart?checkoutError=Database+is+not+configured");
+  const user=await getCurrentUser();
+  if(!user || !["buyer","both"].includes(user.role)) redirect("/login?authError=Buyer+account+required");
+  if(!isStripeConfigured()) redirect("/cart?checkoutError=Payments+are+not+configured");
+  const found=await Promise.all([...new Set(listingIds)].map(id=>findListingById(id)));
+  if(!found.length || found.some(listing=>!listing || listing.status!=="active")) redirect("/cart?checkoutError=An+item+is+no+longer+available");
+  const listings=await applyAcceptedOfferPrices(found.filter((listing):listing is NonNullable<typeof listing>=>Boolean(listing)),user.id);
+  const address=await resolveCheckoutShippingAddress(formData,user);
+  let url="",message="";
+  try {url=await startMarketplaceCheckout(listings,user,address);}
+  catch(error){message=error instanceof Error&&!('code' in error)&&!('type' in error)?error.message:"Checkout could not be opened. A pending reservation will be reconciled automatically; please check your purchases before trying again.";}
+  if(message) redirect(`/cart?checkoutError=${encodeURIComponent(message)}`);
+  redirect(url);
 }
 
-export async function startCartStripeCheckoutAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/cart?checkoutError=Add+DATABASE_URL+to+enable+checkout");
-  const user = await getCurrentUser();
+export async function startStripeCheckoutAction(formData:FormData) {
+  return beginMarketplaceCheckout(formData,[stringValue(formData,"listingId")]);
+}
 
-  if (!user || (user.role !== "buyer" && user.role !== "both")) {
-    redirect("/?authError=Buyer+account+required+to+checkout");
-  }
-
-  if (!isStripeConfigured()) {
-    redirect("/cart?checkoutError=Stripe+is+not+configured+yet.+Add+STRIPE_SECRET_KEY+first");
-  }
-
-  const listingIds = formData
-    .getAll("listingIds")
-    .map((value) => String(value))
-    .filter(Boolean);
-
-  if (!listingIds.length) {
-    redirect("/cart?checkoutError=Your+cart+is+empty");
-  }
-
-  const listings = (await Promise.all(listingIds.map((listingId) => findListingById(listingId)))).filter(
-    (listing): listing is NonNullable<typeof listing> => Boolean(listing)
-  );
-
-  if (!listings.length) {
-    redirect("/cart?checkoutError=Your+cart+is+empty");
-  }
-
-  if (listings.some((listing) => listing.status !== "active")) {
-    redirect("/cart?checkoutError=One+or+more+items+in+your+cart+are+no+longer+available");
-  }
-
-  if (listings.some((listing) => listing.sellerId === user.id)) {
-    redirect(`/cart?checkoutError=${encodeURIComponent("You may not purchase your own item.")}`);
-  }
-
-  const sellerIds = new Set(listings.map((listing) => listing.sellerId));
-  if (sellerIds.size > 1) {
-    redirect(
-      `/cart?checkoutError=${encodeURIComponent(
-        "For now, checkout supports one seller at a time. Please remove items from other sellers and check out separately."
-      )}`
-    );
-  }
-
-  const shippingAddress = await resolveCheckoutShippingAddress(formData, user);
-  const stripe = getStripe();
-  const seller = await findUserById(listings[0].sellerId);
-  const sellerPayoutReady = await isSellerPayoutReady(seller);
-  if (!sellerPayoutReady) {
-    redirect(`/cart?checkoutError=${encodeURIComponent("This seller needs to finish payout setup before checkout.")}`);
-  }
-
-  const destinationAccount = seller?.stripeAccountId ?? null;
-  const itemSubtotal = listings.reduce((sum, listing) => sum + listing.price, 0);
-  const sellerTransferAmount = destinationAccount ? getSellerTransferAmountCents(itemSubtotal) : undefined;
-
-  const orders = await Promise.all(
-    listings.map(async (listing) => {
-      return createOrder({
-        buyerId: user.id,
-        buyerName: user.name,
-        sellerId: listing.sellerId,
-        sellerName: listing.sellerDisplayName,
-        listingId: listing.id,
-        listingTitle: listing.title,
-        amount: listing.price + listing.shippingPrice,
-        subtotal: listing.price,
-        shippingAmount: listing.shippingPrice,
-        paymentMethod: "stripe_checkout",
-        status: "pending_payment",
-        listingStatus: listing.status,
-        returnsAccepted: listing.returnsAccepted,
-        returnPolicy: listing.returnPolicy,
-        stripeCheckoutSessionId: null,
-        stripePaymentIntentId: null,
-        shippingAddress,
-        shippingMethod: listing.shippingMethod,
-        carrier: null,
-        trackingNumber: null,
-        issueReason: null,
-        sellerNotes: null,
-        shippedAt: null,
-        deliveredAt: null
-      });
-    })
-  );
-
-  const lineItems = listings.flatMap((listing) => [
-    {
-      quantity: 1,
-      price_data: {
-        currency: "usd",
-        unit_amount: Math.round(listing.price * 100),
-        product_data: {
-          name: listing.title,
-          description: `${listing.brand} - ${listing.material} - ${listing.pattern}`
-        }
-      }
-    },
-    ...(listing.shippingPrice > 0
-      ? [
-          {
-            quantity: 1,
-            price_data: {
-              currency: "usd",
-              unit_amount: Math.round(listing.shippingPrice * 100),
-              product_data: {
-                name: `Shipping - ${listing.title}`
-              }
-            }
-          }
-        ]
-      : [])
-  ]);
-
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    success_url: `${getAppUrl()}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${getAppUrl()}/cart?checkoutError=Checkout+was+canceled`,
-    customer_email: user.email,
-    line_items: lineItems,
-    shipping_address_collection: {
-      allowed_countries: ["US", "CA"]
-    },
-      metadata: {
-        cartOrderIds: orders.map((order) => order.id).join(",")
-      },
-      payment_intent_data:
-        destinationAccount && sellerTransferAmount
-          ? {
-            transfer_data: {
-              destination: destinationAccount,
-              amount: sellerTransferAmount
-            }
-          }
-          : undefined
-  });
-
-  await Promise.all(orders.map((order) => attachStripeSessionToOrder(order.id, session.id)));
-
-  if (!session.url) {
-    redirect("/cart?checkoutError=Stripe+did+not+return+a+checkout+URL");
-  }
-
-  redirect(session.url);
+export async function startCartStripeCheckoutAction(formData:FormData) {
+  return beginMarketplaceCheckout(formData,formData.getAll("listingIds").map(String).filter(Boolean));
 }
 
 export async function shipOrderAction(formData: FormData) {
@@ -3423,6 +3171,9 @@ export async function shipOrderAction(formData: FormData) {
   const order = await findOrderById(orderId);
   if (!order || order.sellerId !== user.id) {
     redirect("/seller?authError=Order+not+found");
+  }
+  if (!["paid", "processing"].includes(order.status)) {
+    redirect("/seller?authError=Payment+must+be+confirmed+before+shipping");
   }
 
   const carrier = stringValue(formData, "carrier");
@@ -3470,6 +3221,9 @@ export async function buyShippoLabelAction(formData: FormData) {
 
   if (!order || order.sellerId !== user.id) {
     redirect("/seller?authError=Order+not+found");
+  }
+  if (!["paid", "processing"].includes(order.status)) {
+    redirect("/seller?authError=Payment+must+be+confirmed+before+shipping");
   }
 
   const listing = await findListingById(order.listingId);
@@ -3555,6 +3309,9 @@ export async function buySelectedShippoRateAction(formData: FormData) {
   const order = await findOrderById(orderId);
   if (!order || order.sellerId !== user.id) {
     redirect("/seller?authError=Order+not+found");
+  }
+  if (!["paid", "processing"].includes(order.status)) {
+    redirect("/seller?authError=Payment+must+be+confirmed+before+shipping");
   }
 
   const listing = await findListingById(order.listingId);
@@ -4162,19 +3919,11 @@ export async function makeOfferAction(formData: FormData) {
     redirect(`/listings/${listing.id}?intent=offer&authError=${encodeURIComponent(bodyError)}`);
   }
 
-  const offer = await createOffer({
-    buyerId: user.id,
-    sellerId: listing.sellerId,
-    listingId: listing.id,
-    amount,
-    message: message || null
-  });
-
-  revalidatePath("/buyer");
-  revalidatePath(`/listings/${listing.id}`);
-  const seller = await findUserById(listing.sellerId);
-  if (seller) await sendOfferReceivedNotification(offer, seller);
-  redirect("/buyer?saved=offer");
+  let authorizationId="",errorMessage="";
+  try {authorizationId=await createBindingOffer(user.id,listing.id,amount,message);}
+  catch(error){errorMessage=error instanceof Error&&!('code' in error)&&!('type' in error)?error.message:"Unable to prepare this offer. Please try again.";}
+  if(errorMessage) redirect(`/listings/${listing.id}?intent=offer&authError=${encodeURIComponent(errorMessage)}`);
+  redirect(`/offers/authorize/${authorizationId}`);
 }
 
 export async function clearCartAction() {

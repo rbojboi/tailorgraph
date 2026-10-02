@@ -1,3 +1,4 @@
+import { applyAcceptedOfferPrices } from "@/lib/offers";
 import { ListingImage } from "@/components/listing-image";
 import Link from "next/link";
 import { removeFromCartAction } from "@/app/actions";
@@ -62,7 +63,7 @@ export default async function CartPage({
   const user = await getCurrentUser();
   const cartIds = await getCartIds();
   const marketplace = await listMarketplace();
-  const cartListings = marketplace.filter((listing) => cartIds.includes(listing.id) && listing.status === "active");
+  const cartListings = await applyAcceptedOfferPrices(marketplace.filter((listing) => cartIds.includes(listing.id) && listing.status === "active"),user?.id);
   const subtotal = cartListings.reduce((sum, listing) => sum + listing.price, 0);
   const shippingTotal = cartListings.reduce((sum, listing) => sum + listing.shippingPrice, 0);
   const total = subtotal + shippingTotal;

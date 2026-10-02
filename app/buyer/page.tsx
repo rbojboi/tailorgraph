@@ -1,7 +1,7 @@
 import { ListingGallery } from "@/components/listing-gallery";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { filterAndSortMarketplaceListings } from "@/app/marketplace/page";
+import { filterAndSortMarketplaceListings } from "@/lib/marketplace-search";
 import {
   addToCartAction,
   buyNowAction,

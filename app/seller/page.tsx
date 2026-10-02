@@ -1,3 +1,4 @@
+import { OfferResponse } from "@/components/offer-response";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
@@ -67,12 +68,12 @@ function getSellerDeliveryLabel(order: { status: string; createdAt: string; ship
   return `Expected ${formatShortDate(addBusinessDays(new Date(deliveryBase), 5).toISOString())}`;
 }
 
-function getOfferTimeRemainingLabel(offer: { status: OfferStatus; createdAt: string }) {
-  if (offer.status !== "active") {
+function getOfferTimeRemainingLabel(offer: { status: OfferStatus; createdAt: string; expiresAt?: string }) {
+  if (!["active","countered","accepted"].includes(offer.status)) {
     return "Closed";
   }
 
-  const expiresAt = new Date(new Date(offer.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+  const expiresAt = new Date(offer.expiresAt ?? new Date(new Date(offer.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000));
   const remainingMs = expiresAt.getTime() - Date.now();
 
   if (remainingMs <= 0) {
@@ -98,7 +99,7 @@ export default async function SellerPage({
 
   const requestedOfferStatus = firstValue(params.offerStatus) as OfferStatus | "all" | undefined;
   const selectedOfferStatus: OfferStatus | "all" =
-    requestedOfferStatus && ["all", "active", "accepted", "rejected"].includes(requestedOfferStatus)
+    requestedOfferStatus && ["all", "draft", "active", "countered", "accepted", "rejected", "expired"].includes(requestedOfferStatus)
       ? requestedOfferStatus
       : "all";
   const stripeEnabled = isStripeConfigured();
@@ -137,6 +138,7 @@ export default async function SellerPage({
   return (
     <AppShell>
       <PageWrap>
+        {firstValue(params.offerNotice) ? <p role="status" className="rounded-xl bg-stone-100 p-4">{firstValue(params.offerNotice)}</p> : null}
         <section className="panel rounded-[2rem] px-6 py-8 sm:px-8">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div>
@@ -427,6 +429,7 @@ export default async function SellerPage({
                         <Spec label="Time Remaining" value={getOfferTimeRemainingLabel(offer)} />
                         <Spec label="Listed Price" value={formatCurrency(offer.listingPrice)} />
                       </div>
+                      <OfferResponse offer={offer} userId={user.id}/>
                     </article>
                   ))
                 ) : (

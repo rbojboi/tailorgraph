@@ -40,10 +40,12 @@ function addressLabel(address: ShippingAddress) {
 
 export function CheckoutAddressFields({
   savedAddresses,
-  defaultFullName
+  defaultFullName,
+  allowSave = true
 }: {
   savedAddresses: ShippingAddress[];
   defaultFullName: string;
+  allowSave?: boolean;
 }) {
   const hasSavedAddresses = savedAddresses.length > 0;
   const [selection, setSelection] = useState(hasSavedAddresses ? "saved:0" : "new");
@@ -76,7 +78,7 @@ export function CheckoutAddressFields({
         <>
           {!hasSavedAddresses ? (
             <div className="rounded-[1.25rem] bg-stone-50 p-3 text-xs text-stone-600">
-              You have no saved addresses yet. Add one below and it can be saved to your account.
+              {allowSave ? "You have no saved addresses yet. Add one below and it can be saved to your account." : "Add the shipping address for this offer below."}
             </div>
           ) : null}
           <label className="flex flex-col gap-2">
@@ -141,10 +143,10 @@ export function CheckoutAddressFields({
               />
             </label>
           </div>
-          <label className="flex items-center gap-2 text-sm text-stone-700">
+          {allowSave ? <label className="flex items-center gap-2 text-sm text-stone-700">
             <input type="checkbox" name="saveAddressToAccount" value="yes" className="h-4 w-4 shrink-0 rounded border-stone-300" />
             Save this address to my account
-          </label>
+          </label> : null}
         </>
       ) : null}
     </div>
