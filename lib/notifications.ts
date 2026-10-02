@@ -347,8 +347,11 @@ export async function deliverPendingEmails() {
   const { expireOffers } = await import("./offers");
   await ensureSchema();
   const client=await requirePool().connect();
+  let committed=false;
   try {
-    const lock=await client.query("SELECT pg_try_advisory_lock(1208224399,37) AS locked");
+    // A transaction-scoped lock also works with transaction-pooling database proxies.
+    await client.query("BEGIN");
+    const lock=await client.query("SELECT pg_try_advisory_xact_lock(1208224399,37) AS locked");
     if (!lock.rows[0].locked) return {configured:true,busy:true};
     await expireOffers();
     await processNotificationEvents();
@@ -357,8 +360,10 @@ export async function deliverPendingEmails() {
     const result=await drainEmailOutbox(deliverEmailNotification);
     await refreshEmailDeliveryStatuses();
     await client.query("INSERT INTO email_worker_health(id,last_success_at) VALUES(1,NOW()) ON CONFLICT(id) DO UPDATE SET last_success_at=NOW()");
+    await client.query("COMMIT");
+    committed=true;
     return {configured:true,...result};
-  } finally { await client.query("SELECT pg_advisory_unlock(1208224399,37)");client.release(); }
+  } finally { try { if (!committed) await client.query("ROLLBACK"); } finally { client.release(); } }
 }
 
 async function deliverEmailNotification(input: EmailInput) {
