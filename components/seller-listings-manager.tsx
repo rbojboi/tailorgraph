@@ -7,6 +7,7 @@ import {
   shipOrderAction,
   updateListingStatusAction
 } from "@/app/actions";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { SellerInventoryFilterControl } from "@/components/seller-inventory-filter-control";
 import { Input, Select, SectionTitle, Spec } from "@/components/ui";
 import { formatDisplayValue } from "@/lib/display";
@@ -108,18 +109,18 @@ function renderListingEntry(entry: Extract<InventoryEntry, { kind: "listing" }>)
           <form action={updateListingStatusAction}>
             <input type="hidden" name="listingId" value={listing.id} />
             <input type="hidden" name="status" value="active" />
-            <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+            <PendingSubmitButton pendingLabel="Publishing..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
               Publish
-            </button>
+            </PendingSubmitButton>
           </form>
         ) : null}
         {listing.status !== "archived" ? (
           <form action={updateListingStatusAction}>
             <input type="hidden" name="listingId" value={listing.id} />
             <input type="hidden" name="status" value="archived" />
-            <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+            <PendingSubmitButton pendingLabel="Archiving..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
               Archive Listing
-            </button>
+            </PendingSubmitButton>
           </form>
         ) : null}
         <Link
@@ -214,9 +215,9 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
           ) : null}
           <form action={emailSellerShipmentLabelAction} className="contents">
             <input type="hidden" name="orderId" value={order.id} />
-            <button type="submit" className="shipment-action-button shipment-action-button--stone">
+            <PendingSubmitButton type="submit" pendingLabel="Sending..." className="shipment-action-button shipment-action-button--stone">
               {order.shippingQrCodeUrl ? "Email Label & QR" : "Email Label"}
-            </button>
+            </PendingSubmitButton>
           </form>
         </div>
       ) : null}
@@ -235,9 +236,9 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
                 <Input name="sellerNotes" label="Seller notes" defaultValue={order.sellerNotes || ""} type="text" />
               </div>
               <div className="mt-3">
-                <button className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
+                <PendingSubmitButton pendingLabel="Buying label..." className="rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white">
                   Buy Cheapest Shippo Label
-                </button>
+                </PendingSubmitButton>
               </div>
             </form>
           ) : null}
@@ -263,9 +264,9 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
             <Input name="trackingNumber" label="Tracking or pickup ref" defaultValue={order.trackingNumber || ""} />
             <Input name="sellerNotes" label="Seller notes" defaultValue={order.sellerNotes || ""} type="text" />
             <div className="sm:col-span-3">
-              <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+              <PendingSubmitButton pendingLabel="Saving shipment..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
                 Mark as shipped manually
-              </button>
+              </PendingSubmitButton>
             </div>
           </form>
           {!shippoEnabled ? (
@@ -297,9 +298,9 @@ function renderOrderEntry(entry: Extract<InventoryEntry, { kind: "order" }>) {
           />
           <Input name="sellerNotes" label="Resolution notes" defaultValue={order.sellerNotes || ""} type="text" />
           <div className="sm:col-span-3">
-            <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
+            <PendingSubmitButton pendingLabel="Resolving..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-900">
               Resolve issue
-            </button>
+            </PendingSubmitButton>
           </div>
         </form>
       ) : null}

@@ -1,6 +1,7 @@
 import { emailFrequency } from "@/lib/notification-preferences";
 import { redirect } from "next/navigation";
 import { updateNotificationPreferencesAction } from "@/app/actions";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { AppShell, PageWrap, SectionTitle } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureSeedData } from "@/lib/store";
@@ -134,9 +135,9 @@ export default async function AccountNotificationsPage({
                 />
               </label>
 
-              <button className="rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800">
+              <PendingSubmitButton pendingLabel="Saving..." className="rounded-full bg-stone-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-stone-800">
                 Save Preferences
-              </button>
+              </PendingSubmitButton>
             </form>
           </article>
 

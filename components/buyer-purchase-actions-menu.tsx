@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { confirmDeliveryAction, openIssueAction } from "@/app/actions";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 
 export function BuyerPurchaseActionsMenu({
   listingId,
@@ -123,9 +124,9 @@ export function BuyerPurchaseActionsMenu({
             <form action={confirmDeliveryAction}>
               <input type="hidden" name="orderId" value={orderId} />
               <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+              <PendingSubmitButton pendingLabel="Confirming..." className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                 Confirm Delivery
-              </button>
+              </PendingSubmitButton>
             </form>
           ) : null}
           {canReturn ? (
@@ -133,9 +134,9 @@ export function BuyerPurchaseActionsMenu({
               <input type="hidden" name="orderId" value={orderId} />
               <input type="hidden" name="issueReason" value="Return requested by buyer" />
               <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+              <PendingSubmitButton pendingLabel="Requesting..." className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                 Request Return
-              </button>
+              </PendingSubmitButton>
             </form>
           ) : null}
           {canCancel ? (
@@ -143,9 +144,9 @@ export function BuyerPurchaseActionsMenu({
               <input type="hidden" name="orderId" value={orderId} />
               <input type="hidden" name="issueReason" value="Cancellation requested by buyer" />
               <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
+              <PendingSubmitButton pendingLabel="Requesting..." className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-stone-700 transition hover:bg-stone-100 hover:text-stone-950">
                 Request Cancellation
-              </button>
+              </PendingSubmitButton>
             </form>
           ) : null}
           {canReportIssue ? (

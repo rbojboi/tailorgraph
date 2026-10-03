@@ -53,6 +53,50 @@ textarea {
   font: inherit;
 }
 
+button,
+a[href] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+a[href] {
+  transition-duration: 120ms;
+}
+
+button:not(:disabled):active,
+a[href]:active {
+  transform: translateY(1px);
+}
+
+button:disabled,
+button[aria-busy="true"] {
+  cursor: wait;
+  opacity: 0.74;
+}
+
+.navigation-feedback {
+  position: fixed;
+  z-index: 1000;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  pointer-events: none;
+  opacity: 0;
+  transform: scaleX(0.08);
+  transform-origin: left center;
+  background: linear-gradient(90deg, var(--accent), #efc08d, var(--accent-deep));
+  box-shadow: 0 0 18px rgba(180, 91, 50, 0.38);
+  transition:
+    opacity 120ms ease,
+    transform 800ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.navigation-feedback--active {
+  opacity: 1;
+  transform: scaleX(0.82);
+}
+
 h1,
 h2,
 h3,

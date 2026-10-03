@@ -11,6 +11,7 @@ import { MarketplaceFilterSidebar } from "@/components/marketplace-filter-sideba
 import { MarketplaceFilterPanel } from "@/components/marketplace-filter-panel";
 import { MarketplaceSavedSearchActions } from "@/components/marketplace-saved-search-actions";
 import { MarketplaceSortControl } from "@/components/marketplace-sort-control";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { AppShell, PageWrap } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { isAdminUser } from "@/lib/admin";
@@ -401,7 +402,8 @@ export default async function MarketplacePage({
                             <form action={toggleSaveListingAction}>
                               <input type="hidden" name="listingId" value={listing.id} />
                               <input type="hidden" name="returnTo" value={`/marketplace?${new URLSearchParams(Object.entries(filters).flatMap(([key, value]) => Array.isArray(value) ? value.filter(Boolean).map((item) => [key, item] as [string, string]) : value ? [[key, value] as [string, string]] : [])).toString()}`} />
-                              <button
+                              <PendingSubmitButton
+                                pendingLabel={savedListingIds.has(listing.id) ? "Unsaving..." : "Saving..."}
                                 className={`inline-flex min-h-[2.1rem] items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition ${
                                   savedListingIds.has(listing.id)
                                   ? "border border-emerald-300 bg-emerald-100 text-emerald-900"
@@ -409,7 +411,7 @@ export default async function MarketplacePage({
                                 }`}
                               >
                                 {savedListingIds.has(listing.id) ? "Saved" : "Save Item"}
-                              </button>
+                              </PendingSubmitButton>
                             </form>
                           ) : (
                             <Link
@@ -453,9 +455,9 @@ export default async function MarketplacePage({
                               )
                             ).toString()}`}
                           />
-                          <button className="h-11 w-full rounded-xl bg-[var(--accent)] px-3 text-center text-[13px] font-semibold leading-tight text-white">
+                          <PendingSubmitButton pendingLabel="Opening checkout..." className="h-11 w-full rounded-xl bg-[var(--accent)] px-3 text-center text-[13px] font-semibold leading-tight text-white">
                             Purchase
-                          </button>
+                          </PendingSubmitButton>
                         </form>
                         <div className={`grid gap-2 ${listing.allowOffers ? "grid-cols-2" : "grid-cols-[1fr_auto]"}`}>
                           {listing.allowOffers ? (
@@ -478,9 +480,9 @@ export default async function MarketplacePage({
                               )
                             ).toString()}`}
                           />
-                          <button className="h-10 w-full rounded-xl border border-stone-300 bg-white px-2 text-center text-[13px] font-medium leading-tight text-stone-800">
+                          <PendingSubmitButton pendingLabel="Adding..." className="h-10 w-full rounded-xl border border-stone-300 bg-white px-2 text-center text-[13px] font-medium leading-tight text-stone-800">
                             Add to Cart
-                          </button>
+                          </PendingSubmitButton>
                         </form>
                           {!listing.allowOffers ? (
                             <Link href={`/listings/${listing.id}`} className="inline-flex h-10 items-center justify-center rounded-xl border border-stone-300 bg-white px-3 text-center text-[13px] font-medium text-stone-700 transition hover:border-stone-950 hover:text-stone-950">

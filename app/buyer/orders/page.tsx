@@ -5,6 +5,7 @@ import { BuyerPurchaseActionsMenu } from "@/components/buyer-purchase-actions-me
 import { BuyerPurchaseFilterControl } from "@/components/buyer-purchase-filter-control";
 import { BuyerSubpageHeader } from "@/components/buyer-subpage-header";
 import { OrderRatingStars } from "@/components/order-rating-stars";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { AppShell, PageWrap, Spec } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { formatDisplayValue } from "@/lib/display";
@@ -421,9 +422,9 @@ export default async function BuyerOrdersPage({
                           <form action={emailBuyerReturnLabelAction} className="contents">
                             <input type="hidden" name="orderId" value={order.id} />
                             <input type="hidden" name="returnTo" value="/buyer/orders" />
-                            <button className="shipment-action-button shipment-action-button--amber">
+                            <PendingSubmitButton pendingLabel="Sending..." className="shipment-action-button shipment-action-button--amber">
                               {order.returnQrCodeUrl ? "Email Label & QR" : "Email Label"}
-                            </button>
+                            </PendingSubmitButton>
                           </form>
                         </div>
                       ) : null}
@@ -436,9 +437,9 @@ export default async function BuyerOrdersPage({
                           <input type="hidden" name="orderId" value={order.id} />
                           <input type="hidden" name="issueReason" value="Cancellation requested by buyer" />
                           <input type="hidden" name="returnTo" value={`/buyer/orders?purchaseStatus=${selectedPurchaseStatus}&saved=issue`} />
-                          <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-950 hover:text-stone-950">
+                          <PendingSubmitButton pendingLabel="Requesting..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-950 hover:text-stone-950">
                             Request Cancellation
-                          </button>
+                          </PendingSubmitButton>
                         </form>
                       ) : null}
                       {canReturnOrder(order) ? (
@@ -446,9 +447,9 @@ export default async function BuyerOrdersPage({
                           <input type="hidden" name="orderId" value={order.id} />
                           <input type="hidden" name="issueReason" value="Return requested by buyer" />
                           <input type="hidden" name="returnTo" value={`/buyer/orders?purchaseStatus=${selectedPurchaseStatus}&saved=issue`} />
-                          <button className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-950 hover:text-stone-950">
+                          <PendingSubmitButton pendingLabel="Requesting..." className="rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition hover:border-stone-950 hover:text-stone-950">
                             Request Return
-                          </button>
+                          </PendingSubmitButton>
                         </form>
                       ) : null}
                     </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { addToCartAction, buyNowAction, makeOfferAction, toggleSaveListingAction } from "@/app/actions";
 import { ListingGallery } from "@/components/listing-gallery";
 import { OfferAmountInput } from "@/components/offer-amount-input";
+import { PendingSubmitButton } from "@/components/pending-submit-button";
 import { getCurrentUser } from "@/lib/auth";
 import { getCountryDisplayName } from "@/lib/countries";
 import { formatCurrency, formatDisplayValue, formatEraLabel, formatListingSizeLabel, formatSizeLabel } from "@/lib/display";
@@ -648,21 +649,23 @@ export default async function ListingDetail({
                     name="returnTo"
                     value={`/listings/${listing.id}${source === "profile" && sourceUsername ? `?from=profile&username=${sourceUsername}` : ""}`}
                   />
-                  <button
+                  <PendingSubmitButton
                     disabled={listing.status !== "active"}
+                    pendingLabel="Adding..."
                     className="w-full rounded-full border border-stone-400 bg-stone-200 px-4 py-3 text-sm font-semibold text-stone-900 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Add to Cart
-                  </button>
+                  </PendingSubmitButton>
                 </form>
                 <form action={buyNowAction}>
                   <input type="hidden" name="listingId" value={listing.id} />
-                  <button
+                  <PendingSubmitButton
                     disabled={listing.status !== "active"}
+                    pendingLabel="Opening checkout..."
                     className="w-full rounded-full bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Purchase
-                  </button>
+                  </PendingSubmitButton>
                 </form>
                 {listing.allowOffers ? (
                   <Link
@@ -702,9 +705,9 @@ export default async function ListingDetail({
                       className="rounded-2xl border border-stone-600 bg-stone-950 px-4 py-3 text-sm text-stone-50 outline-none"
                     />
                   </label>
-                  <button className="mt-4 w-full rounded-full border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
+                  <PendingSubmitButton pendingLabel="Preparing offer..." className="mt-4 w-full rounded-full border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-semibold text-amber-900">
                     Review and Authorize Offer
-                  </button>
+                  </PendingSubmitButton>
                 </form>
               ) : null}
             </div>
