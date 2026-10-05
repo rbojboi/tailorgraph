@@ -1,7 +1,7 @@
 import { deferToDigest } from "./email-digests";
 import { trackEmail } from "./email-monitor";
 import { emailFrequency } from "./notification-preferences";
-import { renderEmailTemplate } from "./email-template";
+import { renderDigestEmail } from "./email-digest-template";
 import { getAppUrl } from "./stripe";
 import { randomUUID } from "node:crypto";
 import { ensureSchema, findUserById, requirePool } from "@/lib/store";
@@ -98,8 +98,7 @@ export async function drainEmailOutbox(send: (input: EmailInput) => Promise<void
         const items:EmailInput[]=[];
         for (const item of job.payload.digestItems) if (!await shouldSkipEmail(item)) items.push(item);
         job.payload.digestItems=items;
-        job.payload.text=items.map(item=>`${item.subject}\n${item.text}`).join("\n\n");
-        job.payload.html=renderEmailTemplate({title:"Your TailorGraph updates",optional:true,details:items.map(item=>({label:item.subject,value:item.text})),primaryAction:{label:"Visit TailorGraph",url:getAppUrl()}},getAppUrl());
+        Object.assign(job.payload,renderDigestEmail(items,getAppUrl()));
         await db.query("UPDATE email_outbox SET payload=$3::jsonb WHERE event_key=$1 AND lease_token=$2",[job.event_key,lease,JSON.stringify(job.payload)]);
       }
       const skipped = (job.payload.digestItems?.length===0) || await shouldSkipEmail(job.payload) || (job.attempts===1 && await deferToDigest(job.payload));

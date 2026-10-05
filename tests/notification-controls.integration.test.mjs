@@ -106,6 +106,21 @@ test("turning a category off suppresses an already queued digest",async()=>{
  await query(`UPDATE users SET notification_preferences=notification_preferences||'{"savedItemEmail":false}'::jsonb WHERE id='buyer'`);
  assert.equal((await drainEmailOutbox(async()=>assert.fail("Opted out"))).skipped,1);
 });
+
+test("digest delivery refresh keeps clean summaries, item buttons and the remaining update count",async()=>{
+ const url="https://www.tailorgraph.com/listings/listing";
+ const item=email({eventKey:"valid",listingId:"listing",text:`Wool trousers are now $100.\n\n${url}`,digestSummary:"Wool trousers are now $100.",digestAction:{label:"View listing",url}});
+ const stale=email({eventKey:"stale",listingId:"listing",maximumPrice:50,text:"Outdated price"});
+ await enqueueEmail(email({eventKey:"digest-test",digest:true,digestItems:[item,stale],subject:"Your TailorGraph digest · 2 updates"}));
+ let delivered;
+ await drainEmailOutbox(async input=>{delivered=input;});
+ assert.equal(delivered.digestItems.length,1);
+ assert.equal(delivered.subject,"Your TailorGraph digest · 1 update");
+ assert.match(delivered.html,/class="button" href="https:\/\/www.tailorgraph.com\/listings\/listing"/);
+ assert.doesNotMatch(delivered.html.replace(/<[^>]*>/g,""),/https?:\/\//);
+ assert.ok(delivered.text.includes(url));
+ assert.doesNotMatch(delivered.html,/Outdated price/);
+});
 test("signed one-click unsubscribe affects only its optional category and binds the address",async()=>{
  const token=unsubscribeToken("buyer","buyer@example.com","savedItemEmail");assert.ok(readUnsubscribeToken(token));assert.equal(readUnsubscribeToken(token+"x"),null);
  const req=()=>new Request("https://example.com/api/email/unsubscribe?token="+encodeURIComponent(token),{method:"POST"});

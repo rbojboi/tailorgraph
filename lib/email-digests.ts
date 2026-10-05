@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { findUserById, requirePool } from "./store";
 import { emailFrequency, nextDigestDate } from "./notification-preferences";
-import { renderEmailTemplate } from "./email-template";
+import { renderDigestEmail } from "./email-digest-template";
 import { getAppUrl } from "./stripe";
 import { shouldSkipEmail } from "./email-outbox";
 import type { EmailInput } from "./notifications";
@@ -50,13 +50,11 @@ export async function flushEmailDigests() {
       if (valid.length) {
         const first=valid[0];
         const eventKey="digest:"+createHash("sha256").update(processed.join("|")).digest("hex");
-        const subject=`Your TailorGraph digest · ${valid.length} update${valid.length===1?"":"s"}`;
+        const rendered=renderDigestEmail(valid,getAppUrl());
+        const {subject}=rendered;
         const payload:EmailInput={eventKey,eventType:"digest",digest:true,recipientUserId:first.recipientUserId,
-          preferenceKey:first.preferenceKey,to:first.to,category:first.category,subject,
-          digestItems:valid,
-          text:valid.map(item=>`${item.subject}\n${item.text}`).join("\n\n"),
-          html:renderEmailTemplate({title:"Your TailorGraph updates",optional:true,
-            details:valid.map(item=>({label:item.subject,value:item.text})),primaryAction:{label:"Visit TailorGraph",url:getAppUrl()}},getAppUrl())};
+          preferenceKey:first.preferenceKey,to:first.to,category:first.category,...rendered,
+          digestItems:valid};
         await client.query("INSERT INTO email_outbox(event_key,payload) VALUES($1,$2::jsonb) ON CONFLICT(event_key) DO NOTHING",[eventKey,JSON.stringify(payload)]);
         await client.query(`INSERT INTO email_delivery_log(event_key,recipient,category,event_type,subject,status)
           VALUES($1,$2,$3,'digest',$4,'queued') ON CONFLICT(event_key) DO NOTHING`,[eventKey,first.to,first.category??"alerts",subject]);

@@ -5,13 +5,13 @@ export function offerEmailCopy(event:OfferEvent,title:string,isBuyer:boolean,pai
   if(event.autoCharge && event.status==="accepted") {
     if(event.paymentState==="paid") return {
       subject:isBuyer?"Offer accepted — purchase confirmed":"Offer accepted — payment received",
-      text:isBuyer?`${item} Your payment of $${Number(paidTotal).toFixed(2)}, including shipping, is complete. The seller will prepare your order. You can follow shipping updates in My Purchases.`:
+      text:isBuyer?`${item} Your payment of $${Number(paidTotal).toFixed(2)}, including shipping, is complete. The seller will prepare your order.`:
         `${item} The buyer's payment of $${Number(paidTotal).toFixed(2)}, including shipping, is complete. Please prepare the order and ship by the deadline shown in your orders.`,
-      button:isBuyer?"View purchase":"View order"
+      button:isBuyer?"View order":"Manage order"
     };
     if(event.paymentState==="needs_payment") return {
       subject:isBuyer?"Offer accepted — complete your payment":"Offer accepted — awaiting buyer payment",
-      text:isBuyer?`${item} We couldn't complete the automatic payment. Your card may need verification or a different payment method. Open your offers to complete payment before the displayed reservation deadline. Your purchase is confirmed only after payment succeeds.`:
+      text:isBuyer?`${item} We couldn't complete the automatic payment. Your card may need verification or a different payment method. Complete payment before the reservation deadline shown in your offer. Your purchase is confirmed only after payment succeeds.`:
         `${item} The automatic payment needs the buyer's attention. The item is reserved while the buyer completes payment. Please wait for a payment confirmation before shipping.`,
       button:isBuyer?"Complete payment":"View offer"
     };

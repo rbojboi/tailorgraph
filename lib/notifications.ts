@@ -15,6 +15,38 @@ import type { Listing, MessageThread, Order, Offer, SupportRequest, User } from 
 let resendClient: Resend | null = null;
 let twilioClient: ReturnType<typeof twilio> | null = null;
 
+/** Send outside the outbox so a stalled worker or unavailable database cannot block its alert. */
+export async function sendEmailWorkerHealthAlert(health: import("./email-worker-health").WorkerHealth) {
+  const recipients = [...new Set(getAdminEmails())];
+  if (!recipients.length) throw new Error("ADMIN_EMAILS is not configured");
+  const from = getEmailSenderForCategory("support");
+  const status = health.reason === "unavailable"
+    ? "TailorGraph could not check the email worker's database."
+    : "TailorGraph has not recorded a successful email worker run within ten minutes.";
+  const lastSuccess = health.lastSuccess ?? "No successful run available";
+  const subject = "TailorGraph email worker needs attention";
+  const url = "https://www.tailorgraph.com/admin/emails";
+  const html = renderEmailTemplate({
+    eyebrow: "Site operations", title: "Email worker needs attention",
+    introParagraphs: [status],
+    details: [{ label: "Last successful run", value: lastSuccess }],
+    primaryAction: { label: "Review email delivery", url },
+    footerMessage: "Check QStash delivery logs and the production application logs."
+  }, "https://www.tailorgraph.com");
+  // Stable content/key for each incident and UTC day prevents repeated watchdog mail.
+  for (const to of recipients) {
+    const incident = createHash("sha256").update(JSON.stringify([
+      health.reason, lastSuccess, to, new Date().toISOString().slice(0, 10)
+    ])).digest("hex");
+    const result = await getResendClient().emails.send({
+      from, to: [to], replyTo: getReplyToForCategory("support", from), subject, html,
+      text: `${status}\nLast successful run: ${lastSuccess}\nReview email delivery: ${url}`
+    }, { idempotencyKey: `email-worker-health-${incident}` });
+    if (result.error || !result.data?.id) throw new Error("Email worker health alert failed");
+  }
+  return recipients.length;
+}
+
 export type EmailInput = {
   durable?: boolean;
   recipientUserId?: string;
@@ -22,6 +54,8 @@ export type EmailInput = {
   digest?: boolean;
   digestFrequency?: "daily" | "weekly";
   digestItems?: EmailInput[];
+  digestSummary?: string;
+  digestAction?: EmailLayoutInput["primaryAction"];
   listingId?: string;
   savedSearchId?: string;
   requireSavedItem?: boolean;
@@ -501,13 +535,12 @@ function purchaseBuyerEmail(context: OrderNotificationContext) {
 
   return {
     subject: `TailorGraph purchase confirmed: ${order.listingTitle}`,
-    text: `Your TailorGraph purchase is confirmed.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTotal paid: ${formatCurrency(order.amount)}\n\nYou can review tracking and delivery updates in My Purchases: ${orderUrl}`,
+    text: `Your payment is complete. The seller will prepare your order.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTotal paid: ${formatCurrency(order.amount)}\n\nView order: ${orderUrl}`,
     html: renderEmailLayout({
       eyebrow: "Buyer Orders",
       title: "Purchase confirmed",
       introParagraphs: [
-        "Thank you for your purchase on TailorGraph.",
-        "We will keep you updated as the seller ships your order."
+        "Your payment is complete. The seller will prepare your order."
       ],
       bodyHtml: imageHtml,
       details: [
@@ -516,7 +549,7 @@ function purchaseBuyerEmail(context: OrderNotificationContext) {
         { label: "Total paid", value: formatCurrency(order.amount) }
       ],
       primaryAction: {
-        label: "View My Purchases",
+        label: "View order",
         url: orderUrl
       }
     })
@@ -525,17 +558,16 @@ function purchaseBuyerEmail(context: OrderNotificationContext) {
 
 function purchaseSellerEmail(context: OrderNotificationContext) {
   const { order, buyer } = context;
-  const sellerUrl = `${getAppUrl()}/seller`;
+  const sellerUrl = `${getAppUrl()}/seller/orders/${encodeURIComponent(order.id)}`;
 
   return {
     subject: `TailorGraph order received: ${order.listingTitle}`,
-    text: `You have a new TailorGraph order.\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTotal paid: ${formatCurrency(order.amount)}\n\nReview and ship it from the seller dashboard: ${sellerUrl}`,
+    text: `The buyer's payment is complete. Please ship by the deadline shown in your order.\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTotal paid: ${formatCurrency(order.amount)}\n\nManage order: ${sellerUrl}`,
     html: renderEmailLayout({
       eyebrow: "Seller Orders",
       title: "New order received",
       introParagraphs: [
-        "A new order just came through on TailorGraph.",
-        "Review the order details and get shipping started from your seller dashboard."
+        "The buyer's payment is complete. Please ship by the deadline shown in your order."
       ],
       details: [
         { label: "Item", value: order.listingTitle },
@@ -543,7 +575,7 @@ function purchaseSellerEmail(context: OrderNotificationContext) {
         { label: "Total paid", value: formatCurrency(order.amount) }
       ],
       primaryAction: {
-        label: "Open Seller Dashboard",
+        label: "Manage order",
         url: sellerUrl
       }
     })
@@ -557,7 +589,7 @@ function shipmentBuyerEmail(context: OrderNotificationContext) {
 
   return {
     subject: `TailorGraph shipment update: ${order.listingTitle}`,
-    text: `Your order has shipped.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\n\nReview shipping updates here: ${buyerUrl}`,
+    text: `Your seller has marked this order as shipped.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\n\nView order: ${buyerUrl}${order.trackingUrl ? `\nTrack shipment: ${order.trackingUrl}` : ""}`,
     html: renderEmailLayout({
       eyebrow: "Buyer Orders",
       title: "Your order has shipped",
@@ -568,29 +600,30 @@ function shipmentBuyerEmail(context: OrderNotificationContext) {
         { label: "Tracking", value: tracking }
       ],
       primaryAction: {
-        label: "View My Purchases",
+        label: "View order",
         url: buyerUrl
-      }
+      },
+      secondaryAction: order.trackingUrl ? { label: "Track shipment", url: order.trackingUrl } : undefined
     })
   };
 }
 
 function shipmentSellerEmail(context: OrderNotificationContext) {
   const { order, buyer } = context;
-  const sellerUrl = `${getAppUrl()}/seller`;
+  const sellerUrl = `${getAppUrl()}/seller/orders/${encodeURIComponent(order.id)}`;
   const tracking = order.trackingNumber ? `${order.carrier || "Carrier"} - ${order.trackingNumber}` : "Tracking pending";
 
   return {
     subject: `TailorGraph shipping label ready: ${order.listingTitle}`,
-    text: `Your TailorGraph shipping label is ready.\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTracking: ${tracking}\nLabel PDF: ${order.shippingLabelUrl || "Not available"}\nCarrier QR: ${order.shippingQrCodeUrl || "Not available for this label"}\n\nSeller dashboard: ${sellerUrl}`,
+    text: `Your shipping label is ready. ${order.shippingQrCodeUrl ? "Print the label or show the QR code at a carrier counter that accepts QR drop-off." : "This label must be printed. A carrier QR code is not available."}\n\nItem: ${order.listingTitle}\nBuyer: ${buyer.name}\nTracking: ${tracking}\nView shipping label: ${order.shippingLabelUrl || "Not available"}\nView carrier QR: ${order.shippingQrCodeUrl || "Not available for this label"}\n\nManage order: ${sellerUrl}`,
     html: renderEmailLayout({
       eyebrow: "Seller Orders",
       title: "Shipping label ready",
       introParagraphs: [
-        "Your carrier label has been purchased.",
+        "Your shipping label is ready.",
         order.shippingQrCodeUrl
-          ? "Use the PDF if you want to print the label, or use the QR code if the carrier counter accepts QR drop-off."
-          : "Use the PDF to print the label. Shippo did not return a carrier QR code for this label."
+          ? "Print the label or show the QR code at a carrier counter that accepts QR drop-off."
+          : "This label must be printed. A carrier QR code is not available."
       ],
       details: [
         { label: "Item", value: order.listingTitle },
@@ -600,21 +633,21 @@ function shipmentSellerEmail(context: OrderNotificationContext) {
       ],
       primaryAction: order.shippingLabelUrl
         ? {
-            label: "Open Label PDF",
+            label: "View shipping label",
             url: order.shippingLabelUrl
           }
         : {
-            label: "Open Seller Dashboard",
+            label: "Manage order",
             url: sellerUrl
           },
       secondaryAction: order.shippingQrCodeUrl
         ? {
-            label: "Open Carrier QR",
+            label: "View carrier QR",
             url: order.shippingQrCodeUrl
           }
         : order.trackingUrl
           ? {
-              label: "Track Shipment",
+              label: "Track shipment",
               url: order.trackingUrl
             }
           : undefined
@@ -631,15 +664,15 @@ function returnLabelBuyerEmail(context: OrderNotificationContext) {
 
   return {
     subject: `TailorGraph return label ready: ${order.listingTitle}`,
-    text: `Your TailorGraph return label is ready.\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\nReturn Label PDF: ${order.returnLabelUrl || "Not available"}\nCarrier QR: ${order.returnQrCodeUrl || "Not available for this label"}\n\nMy Purchases: ${buyerUrl}`,
+    text: `Your return label is ready. ${order.returnQrCodeUrl ? "Print the label or show the QR code at a carrier counter that accepts QR drop-off." : "This label must be printed. A carrier QR code is not available."}\n\nItem: ${order.listingTitle}\nSeller: @${seller.username || order.sellerName}\nTracking: ${tracking}\nView return label: ${order.returnLabelUrl || "Not available"}\nView carrier QR: ${order.returnQrCodeUrl || "Not available for this label"}\n\nView order: ${buyerUrl}`,
     html: renderEmailLayout({
       eyebrow: "Buyer Returns",
-      title: "Your return label is ready",
+      title: "Return label ready",
       introParagraphs: [
-        "Your return shipping materials are ready.",
+        "Your return label is ready.",
         order.returnQrCodeUrl
-          ? "Use the PDF if you want to print the label, or use the carrier QR if the counter accepts QR drop-off."
-          : "Use the PDF to print the label. Shippo did not return a carrier QR code for this label."
+          ? "Print the label or show the QR code at a carrier counter that accepts QR drop-off."
+          : "This label must be printed. A carrier QR code is not available."
       ],
       details: [
         { label: "Item", value: order.listingTitle },
@@ -649,21 +682,21 @@ function returnLabelBuyerEmail(context: OrderNotificationContext) {
       ],
       primaryAction: order.returnLabelUrl
         ? {
-            label: "Open Return Label PDF",
+            label: "View return label",
             url: order.returnLabelUrl
           }
         : {
-            label: "Open My Purchases",
+            label: "View order",
             url: buyerUrl
           },
       secondaryAction: order.returnQrCodeUrl
         ? {
-            label: "Open Carrier QR",
+            label: "View carrier QR",
             url: order.returnQrCodeUrl
           }
         : order.returnTrackingUrl
           ? {
-              label: "Track Return",
+              label: "Track return",
               url: order.returnTrackingUrl
             }
           : undefined
@@ -683,7 +716,9 @@ function directMessageEmail(context: DirectMessageNotificationContext) {
 
   return {
     subject: `New TailorGraph message from @${senderName}`,
-    text: `Email preferences: ${getAppUrl()}/account/notifications\n\nYou have a new TailorGraph message from @${senderName}.\n\n"${preview}"\n\nReply here: ${messagesUrl}`,
+    text: `You have a new message from @${senderName}.\n\n"${preview}"\n\nView message: ${messagesUrl}\nEmail preferences: ${getAppUrl()}/account/notifications`,
+    digestSummary: `You have a new message from @${senderName}. "${preview}"`,
+    digestAction: { label: "View message", url: messagesUrl },
     html: renderEmailLayout({
       optional: true,
       eyebrow: "Messages",
@@ -693,7 +728,7 @@ function directMessageEmail(context: DirectMessageNotificationContext) {
         preview
       )}"</div>`,
       primaryAction: {
-        label: "Open Messages",
+        label: "View message",
         url: messagesUrl
       }
     })
@@ -706,18 +741,20 @@ function newListingFollowerEmail(context: NewListingNotificationContext) {
 
   return {
     subject: `New TailorGraph listing from @${sellerName}`,
-    text: `Email preferences: ${getAppUrl()}/account/notifications\n\n@${sellerName} just listed a new item on TailorGraph.\n\n${context.listing.title}\n${formatCurrency(context.listing.price)}\n\nView listing: ${listingUrl}`,
+    text: `A seller you follow, @${sellerName}, listed a new item.\n\n${context.listing.title}\n${formatCurrency(context.listing.price)}\n\nView listing: ${listingUrl}\nEmail preferences: ${getAppUrl()}/account/notifications`,
+    digestSummary: `${context.listing.title} — ${formatCurrency(context.listing.price)}. Listed by @${sellerName}, a seller you follow.`,
+    digestAction: { label: "View listing", url: listingUrl },
     html: renderEmailLayout({
       optional: true,
       eyebrow: "Alerts",
       title: `New listing from @${sellerName}`,
-      introParagraphs: ["A seller you follow just listed something new on TailorGraph."],
+      introParagraphs: ["A seller you follow listed a new item."],
       details: [
         { label: "Listing", value: context.listing.title },
         { label: "Price", value: formatCurrency(context.listing.price) }
       ],
       primaryAction: {
-        label: "View Listing",
+        label: "View listing",
         url: listingUrl
       }
     })
@@ -727,16 +764,16 @@ function newListingFollowerEmail(context: NewListingNotificationContext) {
 function emailVerificationEmail(context: AccountEmailVerificationContext) {
   return {
     subject: "Verify your TailorGraph email address",
-    text: `Verify your TailorGraph email address by opening this link:\n\n${context.verificationUrl}\n\nIf you did not request this, you can ignore this email.`,
+    text: `Confirm that this email address belongs to your TailorGraph account.\n\nVerify email: ${context.verificationUrl}\n\nIf you did not request this, you can ignore this email.`,
     html: renderEmailLayout({
       eyebrow: "Account",
       title: "Verify your email",
       introParagraphs: [
-        "Open the link below to confirm that this email address belongs to your TailorGraph account.",
-        "If you did not request this, you can safely ignore this message."
+        "Confirm that this email address belongs to your TailorGraph account.",
+        "If you did not request this, you can ignore this email."
       ],
       primaryAction: {
-        label: "Verify my email address",
+        label: "Verify email",
         url: context.verificationUrl
       },
       footerMessage: "This verification link was sent because a TailorGraph account used this email address."
@@ -747,16 +784,16 @@ function emailVerificationEmail(context: AccountEmailVerificationContext) {
 function passwordResetEmail(context: PasswordResetNotificationContext) {
   return {
     subject: "Reset your TailorGraph password",
-    text: `Reset your TailorGraph password by opening this link:\n\n${context.resetUrl}\n\nIf you did not request this, you can ignore this email.`,
+    text: `A password reset was requested for your TailorGraph account.\n\nReset password: ${context.resetUrl}\n\nIf you did not request this, you can ignore this email.`,
     html: renderEmailLayout({
       eyebrow: "Account",
       title: "Reset your password",
       introParagraphs: [
-        "Open the link below to choose a new password for your TailorGraph account.",
-        "If you did not request this, you can safely ignore this message."
+        "A password reset was requested for your TailorGraph account.",
+        "If you did not request this, you can ignore this email."
       ],
       primaryAction: {
-        label: "Reset my password",
+        label: "Reset password",
         url: context.resetUrl
       },
       footerMessage: "This password reset link was requested for a TailorGraph account."
@@ -771,24 +808,26 @@ function welcomeEmail(context: WelcomeNotificationContext) {
 
   return {
     subject: "Welcome to TailorGraph",
-    text: `Email preferences: ${getAppUrl()}/account/notifications\n\nWelcome to TailorGraph.\n\nStart with your measurements: ${measurementsUrl}\nBrowse the marketplace: ${marketplaceUrl}\nNeed help? Visit Support: ${supportUrl}`,
+    text: `Welcome to TailorGraph. Your account is ready. Save your measurements to find items that fit.\n\nAdd measurements: ${measurementsUrl}\nBrowse marketplace: ${marketplaceUrl}\nGet help: ${supportUrl}\nEmail preferences: ${getAppUrl()}/account/notifications`,
+    digestSummary: "Your account is ready. Save your measurements to find items that fit.",
+    digestAction: { label: "Add measurements", url: measurementsUrl },
     html: renderEmailLayout({
       optional: true,
       eyebrow: "Hello",
       title: "Welcome to TailorGraph",
       introParagraphs: [
         "Your account is ready.",
-        "The best next step is saving the measurements that fit you well so TailorGraph can work in your favor."
+        "Save your measurements to find items that fit."
       ],
       primaryAction: {
-        label: "Start with your measurements",
+        label: "Add measurements",
         url: measurementsUrl
       },
       secondaryAction: {
-        label: "Browse the marketplace",
+        label: "Browse marketplace",
         url: marketplaceUrl
       },
-      footerMessage: `Need help getting started? Visit TailorGraph Support: ${supportUrl}`
+      footerMessage: "Need help getting started? We're here to help."
     })
   };
 }
@@ -797,17 +836,17 @@ function supportRequestConfirmationEmail(context: SupportRequestNotificationCont
   const supportUrl = `${getAppUrl()}/support`;
   return {
     subject: `TailorGraph support request received: ${context.request.subject}`,
-    text: `We received your TailorGraph ${context.request.kind} request.\n\nSubject: ${context.request.subject}\nTopic: ${context.request.topic}\n\nWe're looking into it and will follow up as needed. You can revisit support here: ${supportUrl}`,
+    text: `We received your request and will follow up as needed.\n\nSubject: ${context.request.subject}\nTopic: ${context.request.topic}\n\nView support: ${supportUrl}`,
     html: renderEmailLayout({
       eyebrow: "Support",
       title: "We received your request",
-      introParagraphs: ["We're looking into it and will follow up as needed."],
+      introParagraphs: ["We received your request and will follow up as needed."],
       details: [
         { label: "Subject", value: context.request.subject },
         { label: "Topic", value: context.request.topic }
       ],
       primaryAction: {
-        label: "Return to Support",
+        label: "View support",
         url: supportUrl
       }
     })
@@ -820,7 +859,7 @@ function supportRequestInternalEmail(context: SupportRequestNotificationContext)
 
   return {
     subject: `TailorGraph ${subject.toLowerCase()}: ${request.subject}`,
-    text: `${subject}\n\nRequester: ${request.requesterName} <${request.requesterEmail}>\nRole: ${request.requesterRole}\nKind: ${request.kind}\nTopic: ${request.topic}\nOrder ID: ${request.orderId || "None"}\nListing ID: ${request.listingId || "None"}\n\n${request.message}`,
+    text: `${subject}\n\nRequester: ${request.requesterName} <${request.requesterEmail}>\nRole: ${request.requesterRole}\nKind: ${request.kind}\nTopic: ${request.topic}\nOrder ID: ${request.orderId || "None"}\nListing ID: ${request.listingId || "None"}\n\n${request.message}\n\nReview request: ${getAppUrl()}/admin`,
     html: renderEmailLayout({
       eyebrow: "Support",
       title: subject,
@@ -835,6 +874,7 @@ function supportRequestInternalEmail(context: SupportRequestNotificationContext)
       bodyHtml: `<div style="margin:20px 0 0;padding:18px;border-radius:20px;background:#fbf8f4;border:1px solid #e4dbcf;color:#44403c;font-size:15px;line-height:1.7;white-space:pre-wrap">${escapeHtml(
         request.message
       )}</div>`,
+      primaryAction: { label: "Review request", url: `${getAppUrl()}/admin` },
       footerMessage: "This alert was generated from the TailorGraph support center."
     })
   };
@@ -1070,16 +1110,18 @@ export function getEstimatedArrivalLabel(order: Order, listing: Listing | null) 
   return formatShortDate(addBusinessDays(estimatedShipBy, 5));
 }
 
-export async function sendReturnEmail(to: string, eventKey: string, subject: string, text: string, url: string) {
+export async function sendReturnEmail(to: string, eventKey: string, subject: string, text: string, url: string, button = "View return") {
   if (!isEmailNotificationConfigured()) throw new Error("Return email delivery is not configured");
-  await sendEmailNotification({ to, eventKey, eventType: "return_update", category: "support", subject, text,
-    html: renderEmailLayout({ title: subject, introParagraphs: [text], primaryAction: { label: "View return", url } }) });
+  await sendEmailNotification({ to, eventKey, eventType: "return_update", category: "support", subject, text: `${text}\n\n${button}: ${url}`,
+    html: renderEmailLayout({ title: subject, introParagraphs: [text], primaryAction: { label: button, url } }) });
 }
 
 function offerReceivedEmail(offer: Offer) {
   const url = `${getAppUrl()}/seller?offerStatus=active`;
   return {
     subject: `New offer on ${offer.listingTitle}`,
+    digestSummary: `@${offer.buyerUsername} offered ${formatCurrency(offer.amount)} for ${offer.listingTitle}. This is an offer, not a paid order.`,
+    digestAction: { label: "Review offer", url },
     text: `@${offer.buyerUsername} offered ${formatCurrency(offer.amount)} for ${offer.listingTitle}. This is an offer, not a paid order.\n\nReview offer: ${url}\nEmail preferences: ${getAppUrl()}/account/notifications`,
     html: renderEmailLayout({
       eyebrow: "Offers", title: "An offer for your item", optional: true,
@@ -1100,4 +1142,8 @@ export async function sendOfferReceivedNotification(offer: Offer, seller: User) 
 }
 
 // Pure rendering entry points for local previews; these never call a delivery provider.
-export const emailPreviews = { purchaseBuyerEmail, purchaseSellerEmail, shipmentBuyerEmail, directMessageEmail, offerReceivedEmail, welcomeEmail };
+export const emailPreviews = {
+  purchaseBuyerEmail, purchaseSellerEmail, shipmentBuyerEmail, shipmentSellerEmail,
+  returnLabelBuyerEmail, directMessageEmail, newListingFollowerEmail, offerReceivedEmail,
+  welcomeEmail, emailVerificationEmail, passwordResetEmail, supportRequestConfirmationEmail
+};

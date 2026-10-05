@@ -11,8 +11,8 @@ export async function deliverReturnNotifications() {
       if (!order) continue;
       const [buyer, seller] = await Promise.all([findUserById(order.buyerId), findUserById(order.sellerId)]);
       const copy: Record<string, string> = {
-        approved: "Return approved. Purchase your return label and hand the package to the carrier within 5 calendar days. Original shipping is not refunded.",
-        label_ready: "Your paid return label is ready in Purchases. The full item price will be refunded after the first carrier acceptance scan.",
+        approved: "The return is approved. The buyer has 5 calendar days to purchase a return label and hand the package to the carrier. Original shipping is not refunded.",
+        label_ready: "The paid return label is ready. The full item price will be refunded after the first carrier acceptance scan.",
         refunded: `The full item price ($${order.subtotal.toFixed(2)}) has been refunded. Original shipping and the return-label charge are excluded. Your bank may take several days to show the credit.`,
         received: "The return has been delivered. The seller has 48 hours after carrier delivery to inspect it and report a problem.",
         disputed: "The seller reported a problem with the returned item. TailorGraph will review the evidence. The buyer's completed refund is unchanged.",
@@ -26,7 +26,11 @@ export async function deliverReturnNotifications() {
            seller ? { email: seller.email, path: `/seller/orders/${order.id}/return` } : null,
            ...(row.kind === "disputed" ? getAdminEmails().map(email => ({ email, path: "/admin/returns" })) : [])].filter((value): value is { email: string; path: string } => value !== null);
       if (!recipients.length) throw new Error("No return notification recipients configured");
-      for (const recipient of recipients) await sendReturnEmail(recipient.email, `${row.id}:${recipient.email}`, `TailorGraph return: ${order.listingTitle}`, text, `${getAppUrl()}${recipient.path}`);
+      for (const recipient of recipients) {
+        const button = row.kind === "approved" && recipient.path.startsWith("/buyer/")
+          ? "Get return label" : "View return";
+        await sendReturnEmail(recipient.email, `${row.id}:${recipient.email}`, `TailorGraph return: ${order.listingTitle}`, text, `${getAppUrl()}${recipient.path}`, button);
+      }
       await requirePool().query("UPDATE return_notification_outbox SET sent_at=NOW() WHERE id=$1", [row.id]);
     } catch (error) {
       // Leave the durable outbox entry pending. A mail outage cannot undo a refund.

@@ -1,3 +1,5 @@
+type EmailAction = { label: string; url: string };
+
 export type EmailLayoutInput = {
   eyebrow?: string;
   title: string;
@@ -5,9 +7,9 @@ export type EmailLayoutInput = {
   introParagraphs?: string[];
   /** Only trusted template markup; escape any user content before inserting. */
   bodyHtml?: string;
-  details?: Array<{ label: string; value: string }>;
-  primaryAction?: { label: string; url: string };
-  secondaryAction?: { label: string; url: string };
+  details?: Array<{ label: string; value: string; action?: EmailAction }>;
+  primaryAction?: EmailAction;
+  secondaryAction?: EmailAction;
   footerMessage?: string;
   optional?: boolean;
 };
@@ -26,12 +28,19 @@ export function emailUrl(value: string) {
 }
 
 /** Table layout and inline styles keep the core design usable in Outlook and with CSS stripped. */
+function renderAction(action: EmailAction, secondary = false) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:${secondary ? "14" : "24"}px;"><tr><td>
+<a class="button" href="${emailUrl(action.url)}" style="display:inline-block;background:${secondary ? "#fcfcfa" : "#6e3521"};border:1px solid #6e3521;border-radius:8px;color:${secondary ? "#6e3521" : "#ffffff"};padding:14px 22px;font-size:14px;line-height:20px;font-weight:600;text-decoration:none;mso-padding-alt:0;"><!--[if mso]><i style="mso-font-width:150%;mso-text-raise:22pt;" hidden>&emsp;</i><![endif]--><span style="mso-text-raise:11pt;">${escapeEmailHtml(action.label)}</span><!--[if mso]><i style="mso-font-width:150%;" hidden>&emsp;</i><![endif]--></a>
+</td></tr></table>`;
+}
+
 export function renderEmailTemplate(input: EmailLayoutInput, appUrl: string) {
   const e = escapeEmailHtml;
   const details = (input.details ?? []).map(detail => `
     <tr><td style="padding:13px 16px;border-bottom:1px solid #e5ded5;">
       <p style="margin:0 0 4px;font-size:11px;font-weight:600;letter-spacing:1.3px;text-transform:uppercase;color:#6e6258;">${e(detail.label)}</p>
       <p style="margin:0;font-size:16px;line-height:24px;color:#1c1712;word-break:break-word;">${e(detail.value)}</p>
+      ${detail.action ? renderAction(detail.action) : ""}
     </td></tr>`).join("");
   const action = input.primaryAction;
   const secondary = input.secondaryAction;
@@ -57,10 +66,8 @@ export function renderEmailTemplate(input: EmailLayoutInput, appUrl: string) {
 ${(input.introParagraphs ?? []).map(p => `<p style="margin:0 0 14px;font-size:16px;line-height:26px;color:#51473e;">${e(p)}</p>`).join("")}
 ${input.bodyHtml ?? ""}
 ${details ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;background:#f5f1eb;border:1px solid #e5ded5;border-radius:10px;">${details}</table>` : ""}
-${action ? `<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:28px;"><tr><td>
-<a class="button" href="${emailUrl(action.url)}" style="display:inline-block;background:#6e3521;border:1px solid #6e3521;border-radius:8px;color:#ffffff;padding:14px 22px;font-size:14px;line-height:20px;font-weight:600;text-decoration:none;mso-padding-alt:0;"><!--[if mso]><i style="mso-font-width:150%;mso-text-raise:22pt;" hidden>&emsp;</i><![endif]--><span style="mso-text-raise:11pt;">${e(action.label)}</span><!--[if mso]><i style="mso-font-width:150%;" hidden>&emsp;</i><![endif]--></a>
-</td></tr></table>` : ""}
-${secondary ? `<p style="margin:18px 0 0;font-size:14px;line-height:22px;"><a href="${emailUrl(secondary.url)}" style="color:#6e3521;text-decoration:underline;">${e(secondary.label)}</a></p>` : ""}
+${action ? renderAction(action) : ""}
+${secondary ? renderAction(secondary, true) : ""}
 </td></tr>
 <tr><td style="padding:22px 16px 0;font-size:12px;line-height:20px;color:#6e6258;text-align:center;">
 <p style="margin:0 0 10px;">${e(input.footerMessage ?? "A considered wardrobe. A better fit.")}</p>
