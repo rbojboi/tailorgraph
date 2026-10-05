@@ -28,11 +28,11 @@ mock.module(new URL("../lib/store.ts", import.meta.url).href, {
 mock.module(new URL("../lib/stripe.ts", import.meta.url).href, {
   namedExports: { getAppUrl: () => "https://example.com" }
 });
-const { sendReturnEmail, sendSenderTestNotification } = await import("../lib/notifications.ts");
+const { sendReturnEmail, sendSenderTestNotification, sendEmailWorkerHealthAlert } = await import("../lib/notifications.ts");
 
 const environmentKeys = [
   "RESEND_API_KEY", "EMAIL_FROM", "EMAIL_FROM_SUPPORT", "EMAIL_FROM_MESSAGES",
-  "EMAIL_FROM_NOREPLY", "EMAIL_REPLY_TO", "EMAIL_REPLY_TO_SUPPORT"
+  "EMAIL_FROM_NOREPLY", "EMAIL_REPLY_TO", "EMAIL_REPLY_TO_SUPPORT", "ADMIN_EMAILS"
 ];
 let savedEnvironment;
 beforeEach(() => {
@@ -55,6 +55,26 @@ const sendReturn = () => sendReturnEmail(
   "buyer@example.com", "return:test", "Return update", "Your return is on its way.",
   "https://example.com/orders/test"
 );
+
+test("worker health alerts bypass storage and reuse provider idempotency for the same incident", async () => {
+  process.env.ADMIN_EMAILS = "Admin@example.com,admin@example.com";
+  process.env.EMAIL_FROM_SUPPORT = "TailorGraph Support <support@mail.tailorgraph.com>";
+  process.env.EMAIL_REPLY_TO_SUPPORT = "support@tailorgraph.com";
+  const incident = { healthy: false, lastSuccess: "2026-10-05T12:00:00.000Z", reason: "stale" };
+  assert.equal(await sendEmailWorkerHealthAlert(incident), 1);
+  await sendEmailWorkerHealthAlert(incident);
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[0], sent[1]);
+  assert.deepEqual(sent[0].message.to, ["admin@example.com"]);
+  assert.equal(sent[0].message.from, process.env.EMAIL_FROM_SUPPORT);
+  assert.equal(sent[0].message.replyTo, "support@tailorgraph.com");
+  assert.match(sent[0].message.html, /Review email delivery/);
+  assert.equal(deliveries.length, 0);
+  await sendEmailWorkerHealthAlert({ ...incident, lastSuccess: null, reason: "unavailable" });
+  assert.notEqual(sent[2].options.idempotencyKey, sent[0].options.idempotencyKey);
+  delete process.env.ADMIN_EMAILS;
+  await assert.rejects(sendEmailWorkerHealthAlert(incident), /ADMIN_EMAILS/);
+});
 const sendTest = (category) => sendSenderTestNotification({
   to: "tester@example.com", category, runToken: "reply-to-test", skipDedupe: true
 });

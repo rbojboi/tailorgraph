@@ -1,8 +1,7 @@
 name: Email delivery worker
 
 on:
-  schedule:
-    - cron: '2-57/5 * * * *'
+  # QStash owns the production timer. Keep this as manual recovery only.
   workflow_dispatch:
 
 permissions: {}
