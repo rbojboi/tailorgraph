@@ -80,12 +80,14 @@ test("automatic offer payment notices bypass optional opt-outs and suppress stal
  assert.equal(rows.length,2);assert.ok(rows.every(row=>!row.payload.preferenceKey));
  assert.deepEqual(rows.map(row=>row.payload.category).sort(),['buyer_orders','seller_orders']);
  assert.equal(await shouldSkipEmail(rows[0].payload),false);
- await query("INSERT INTO orders(id,amount) VALUES('paid-order',90)");
+ await query("INSERT INTO orders(id,amount,status) VALUES('paid-order',90,'processing')");
  await query("UPDATE offers SET payment_state='paid',paid_order_id='paid-order',revision=revision+1");
  assert.equal(await shouldSkipEmail(rows[0].payload),true);await processNotificationEvents();
  const paid=(await query("SELECT payload FROM email_outbox WHERE payload->>'offerPaymentState'='paid'")).rows;
  assert.equal(paid.length,2);assert.ok(paid.every(row=>row.payload.text.includes('$90.00')));
  assert.ok(paid.every(row=>!row.payload.text.includes('Payment is still required')));
+ await query("UPDATE orders SET status='refunded' WHERE id='paid-order'");
+ assert.equal(await shouldSkipEmail(paid[0].payload),true);
 });
 test("daily digests batch once, erase item content, and retain stable content on retries",async()=>{
  await query(`UPDATE users SET notification_preferences=notification_preferences||'{"emailFrequency":{"savedItemEmail":"daily"}}'::jsonb WHERE id='buyer'`);

@@ -4,6 +4,12 @@ import { afterEach, beforeEach, mock, test } from "node:test";
 const sent = [];
 const deliveries = [];
 let alreadyDelivered = false;
+const queued = new Map();
+mock.module(new URL("../lib/email-outbox.ts", import.meta.url).href, {namedExports:{
+  EmailDeliveryError: class extends Error {},
+  enqueueEmail: async input => queued.set(input.eventKey,input),
+  drainEmailOutbox: async (send,key) => { const input=queued.get(key); if(input) await send(input); }
+}});
 mock.module("resend", {
   namedExports: {
     Resend: class {
@@ -41,6 +47,7 @@ beforeEach(() => {
   process.env.RESEND_API_KEY = "re_test_not_a_real_key";
   process.env.EMAIL_FROM = "TailorGraph <noreply@mail.tailorgraph.com>";
   sent.length = 0;
+  queued.clear();
   deliveries.length = 0;
   alreadyDelivered = false;
 });

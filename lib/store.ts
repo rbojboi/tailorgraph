@@ -1,5 +1,6 @@
 import { NOTIFICATION_SCHEMA } from "@/lib/notification-schema";
 import { COMMERCE_SCHEMA } from "@/lib/commerce-schema";
+import { TRANSACTION_SCHEMA } from "@/lib/transaction-schema";
 import { EMAIL_OUTBOX_SCHEMA } from "@/lib/email-outbox-schema";
 import { randomUUID } from "node:crypto";
 import { Pool, type PoolClient } from "pg";
@@ -728,6 +729,7 @@ async function initSchema() {
   await client.query(EMAIL_OUTBOX_SCHEMA);
   await client.query(NOTIFICATION_SCHEMA);
   await client.query(COMMERCE_SCHEMA);
+  await client.query(TRANSACTION_SCHEMA);
 
   await client.query(
     `INSERT INTO tailorgraph_schema_migrations (version)
@@ -2394,7 +2396,9 @@ export async function updateOrderShipping(
   sellerNotes: string | null
 ): Promise<void> {
   await ensureSchema();
-  await requirePool().query(
+  const { commerceLock } = await import("./commerce-common");
+  await commerceLock(`shipment:${orderId}`, async () => {
+  const result = await requirePool().query(
     `UPDATE orders
      SET status = 'shipped',
          carrier = $1,
@@ -2410,9 +2414,11 @@ export async function updateOrderShipping(
          shipping_provider_rate_id = NULL,
          shipping_provider_transaction_id = NULL,
          shipped_at = NOW()
-     WHERE id = $4`,
+     WHERE id = $4 AND status IN ('paid','processing') AND NOT EXISTS(SELECT 1 FROM outbound_labels WHERE order_id=$4)`,
     [carrier, trackingNumber, sellerNotes, orderId]
   );
+  if (!result.rowCount) throw new Error("Order cannot be shipped. Check its payment and existing label before retrying.");
+  });
 }
 
 export async function updateOrderShippingWithProvider(
@@ -2433,7 +2439,7 @@ export async function updateOrderShippingWithProvider(
   }
 ): Promise<void> {
   await ensureSchema();
-  await requirePool().query(
+  const result = await requirePool().query(
     `UPDATE orders
      SET status = 'shipped',
          carrier = $1,
@@ -2449,7 +2455,7 @@ export async function updateOrderShippingWithProvider(
          shipping_provider_transaction_id = $11,
          seller_notes = $12,
          shipped_at = NOW()
-     WHERE id = $13`,
+     WHERE id = $13 AND (status IN ('paid','processing') OR (status='shipped' AND shipping_provider_transaction_id=$11))`,
     [
       input.carrier,
       input.trackingNumber,
@@ -2466,6 +2472,7 @@ export async function updateOrderShippingWithProvider(
       orderId
     ]
   );
+  if (!result.rowCount) throw new Error("Order cannot be shipped. Check its payment and existing label before retrying.");
 }
 
 export async function updateOrderReturnShippingWithProvider(
@@ -2537,6 +2544,7 @@ export async function updateOrderTrackingFromProvider(
     trackingUrl: string | null;
     trackingStatus: string | null;
     shippingEta: string | null;
+    deliveredAt?: string | null;
   }
 ): Promise<void> {
   await ensureSchema();
@@ -2549,12 +2557,14 @@ export async function updateOrderTrackingFromProvider(
         ? "shipped"
         : null;
 
+  const timestamp = input.deliveredAt ? Date.parse(input.deliveredAt) : NaN;
+  const deliveredAt = Number.isFinite(timestamp) && timestamp <= Date.now() + 300000 ? new Date(timestamp).toISOString() : null;
   await requirePool().query(
     `UPDATE orders
      SET carrier = COALESCE($1, carrier),
          tracking_number = COALESCE($2, tracking_number),
          tracking_url = COALESCE($3, tracking_url),
-         tracking_status = COALESCE($4, tracking_status),
+         tracking_status = CASE WHEN tracking_status='DELIVERED' THEN tracking_status ELSE COALESCE($4, tracking_status) END,
          shipping_eta = COALESCE($5::timestamptz, shipping_eta),
          status = CASE
            WHEN status IN ('canceled', 'refunded', 'failed', 'issue_open') OR return_status IS NOT NULL THEN status
@@ -2563,7 +2573,7 @@ export async function updateOrderTrackingFromProvider(
            ELSE status
          END,
          delivered_at = CASE
-           WHEN $6 = 'delivered' AND delivered_at IS NULL THEN NOW()
+           WHEN $6 = 'delivered' AND $8::timestamptz IS NOT NULL THEN LEAST(delivered_at,$8::timestamptz)
            ELSE delivered_at
          END
      WHERE id = $7`,
@@ -2574,7 +2584,8 @@ export async function updateOrderTrackingFromProvider(
       input.trackingStatus,
       input.shippingEta,
       orderStatus,
-      orderId
+      orderId,
+      deliveredAt
     ]
   );
 }

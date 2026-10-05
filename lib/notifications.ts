@@ -64,6 +64,7 @@ export type EmailInput = {
   offerId?: string;
   offerPaymentState?: string;
   requireUnshipped?: boolean;
+  requirePaidOrder?: boolean;
   messageId?: string;
   eventKey: string;
   eventType: string;
@@ -391,6 +392,8 @@ export async function deliverPendingEmails() {
     if (!lock.rows[0].locked) return {configured:true,busy:true};
     await expireOffers();
     await processNotificationEvents();
+    const { deliverReturnNotifications } = await import("./return-notifications");
+    await deliverReturnNotifications();
     await queueShippingReminders();
     await flushEmailDigests();
     const result=await drainEmailOutbox(deliverEmailNotification);
@@ -885,6 +888,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
   await sendEmailNotification({
     eventKey: `purchase:${context.order.id}:buyer_email`,
     eventType: "purchase_confirmation",
+    orderId: context.order.id, requirePaidOrder: true,
     durable: true,
     to: context.buyer.email,
     category: "buyer_orders",
@@ -895,6 +899,7 @@ export async function sendOrderPurchasedNotifications(context: OrderNotification
   await sendEmailNotification({
     eventKey: `purchase:${context.order.id}:seller_email`,
     eventType: "seller_order_alert",
+    orderId: context.order.id, requirePaidOrder: true,
     durable: true,
     to: context.seller.email,
     category: "seller_orders",
@@ -907,6 +912,7 @@ export async function sendOrderShippedNotifications(context: OrderNotificationCo
   await sendEmailNotification({
     eventKey: `shipment:${context.order.id}:buyer_email`,
     eventType: "shipment_update",
+    orderId: context.order.id, requirePaidOrder: true,
     durable: true,
     to: context.buyer.email,
     category: "buyer_orders",
@@ -935,6 +941,7 @@ export async function sendSellerShipmentLabelNotification(
   await sendEmailNotification({
     eventKey: options?.eventKey ?? `shipment:${context.order.id}:seller_label_email`,
     eventType: "seller_shipment_label",
+    orderId: context.order.id, requirePaidOrder: true,
     durable: true,
     to: context.seller.email,
     category: "seller_orders",
@@ -1112,7 +1119,7 @@ export function getEstimatedArrivalLabel(order: Order, listing: Listing | null) 
 
 export async function sendReturnEmail(to: string, eventKey: string, subject: string, text: string, url: string, button = "View return") {
   if (!isEmailNotificationConfigured()) throw new Error("Return email delivery is not configured");
-  await sendEmailNotification({ to, eventKey, eventType: "return_update", category: "support", subject, text: `${text}\n\n${button}: ${url}`,
+  await sendEmailNotification({ to, eventKey, durable: true, eventType: "return_update", category: "support", subject, text: `${text}\n\n${button}: ${url}`,
     html: renderEmailLayout({ title: subject, introParagraphs: [text], primaryAction: { label: button, url } }) });
 }
 

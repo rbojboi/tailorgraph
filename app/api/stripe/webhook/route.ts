@@ -1,7 +1,8 @@
 import Stripe from "stripe";
 import { sendOrderPurchasedNotifications } from "@/lib/notifications";
 import { getStripe } from "@/lib/stripe";
-import { fulfillReturnLabel, processReturn } from "@/lib/returns";
+import { fulfillReturnLabel } from "@/lib/returns";
+import { reconcilePaymentRefund } from "@/lib/refund-reconciliation";
 import { deliverReturnNotifications } from "@/lib/return-notifications";
 import { requirePool } from "@/lib/store";
 import {
@@ -93,8 +94,13 @@ export async function POST(request: Request) {
 
   if (["refund.created", "refund.updated", "refund.failed"].includes(event.type)) {
     const refund = event.data.object as Stripe.Refund;
-    const orderId = refund.metadata?.tailorgraphReturn;
-    if (orderId) await processReturn(orderId);
+    const intentId = typeof refund.payment_intent === 'string' ? refund.payment_intent : refund.payment_intent?.id;
+    if (intentId) await reconcilePaymentRefund(intentId);
+  }
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object as Stripe.Charge;
+    const intentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
+    if (intentId) await reconcilePaymentRefund(intentId);
   }
   if (event.type === "checkout.session.expired") {
     const session = event.data.object as Stripe.Checkout.Session;

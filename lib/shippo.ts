@@ -385,10 +385,16 @@ export async function getShippoReturnTracking(carrier: string, trackingNumber: s
   }>(`/tracks/${encodeURIComponent(token)}/${encodeURIComponent(trackingNumber)}`, { method: "GET" });
 }
 
-export async function recoverShippoReturnLabel(transactionId: string, paymentId: string, shipmentId: string, rateId: string): Promise<ShippoLabelPurchase> {
+export async function recoverShippoReturnLabel(transactionId: string, paymentId: string, shipmentId: string, rateId: string) {
+  return recoverLabel(transactionId, 'return-label:' + paymentId, shipmentId, rateId);
+}
+export async function recoverShippoOutboundLabel(transactionId: string, orderId: string, shipmentId: string, rateId: string) {
+  return recoverLabel(transactionId, 'outbound-label:' + orderId, shipmentId, rateId);
+}
+async function recoverLabel(transactionId: string, metadata: string, shipmentId: string, rateId: string): Promise<ShippoLabelPurchase> {
   const t = await shippoRequest<ShippoTransactionResponse>(`/transactions/${encodeURIComponent(transactionId)}`, { method: "GET" });
-  if (t.metadata !== `return-label:${paymentId}` || t.status !== "SUCCESS" || !t.tracking_number) {
-    throw new Error("This successful Shippo transaction does not belong to the return-label payment.");
+  if (t.metadata !== metadata || t.status !== "SUCCESS" || !t.tracking_number) {
+    throw new Error("This successful Shippo transaction does not belong to this label purchase.");
   }
   return {
     carrier: t.rate?.provider || "Shippo", trackingNumber: t.tracking_number,

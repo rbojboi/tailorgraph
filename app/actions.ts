@@ -70,7 +70,6 @@ import {
   updateBuyerAccount,
   updateOrderIssue,
   updateOrderShipping,
-  updateOrderShippingWithProvider,
   updateSellerLocation,
   updateNotificationPreferences,
   updateUserAdminAccess,
@@ -96,7 +95,8 @@ import {
   sendSupportRequestNotifications,
   sendWelcomeNotification
 } from "@/lib/notifications";
-import { purchaseShippoLabel, purchaseShippoLabelForRate } from "@/lib/shippo";
+import { createShippoShipmentQuote } from "@/lib/shippo";
+import { buyOutboundLabel, saveOutboundQuote } from "@/lib/outbound-labels";
 import { requestReturn, startReturnLabelCheckout, getReturn } from "@/lib/returns";
 import { deliverReturnNotifications } from "@/lib/return-notifications";
 import { estimateShippingCost, estimateTailoringDistanceFromSellerLocation } from "@/lib/shipping";
@@ -3209,182 +3209,36 @@ export async function shipOrderAction(formData: FormData) {
 }
 
 export async function buyShippoLabelAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+manage+orders");
-  const user = await getCurrentUser();
-  if (!user || (user.role !== "seller" && user.role !== "both")) {
-    redirect("/?authError=Seller+account+required");
-  }
-
-  const orderId = stringValue(formData, "orderId");
-  const sellerNotes = stringValue(formData, "sellerNotes") || null;
-  const order = await findOrderById(orderId);
-
-  if (!order || order.sellerId !== user.id) {
-    redirect("/seller?authError=Order+not+found");
-  }
-  if (!["paid", "processing"].includes(order.status)) {
-    redirect("/seller?authError=Payment+must+be+confirmed+before+shipping");
-  }
-
-  const listing = await findListingById(order.listingId);
-  if (!listing) {
-    redirect("/seller?authError=Listing+not+found+for+this+order");
-  }
-
-  let purchasedLabel;
-
-  try {
-    purchasedLabel = await purchaseShippoLabel({
-      order,
-      listing,
-      seller: user
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Shippo could not create a label for this order.";
-    redirect(`/seller?authError=${encodeURIComponent(message)}`);
-  }
-
-  await updateOrderShippingWithProvider(orderId, {
-    carrier: purchasedLabel.carrier,
-    trackingNumber: purchasedLabel.trackingNumber,
-    trackingUrl: purchasedLabel.trackingUrl,
-    trackingStatus: purchasedLabel.trackingStatus,
-    shippingEta: purchasedLabel.shippingEta,
-    shippingLabelUrl: purchasedLabel.shippingLabelUrl,
-    shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-    shippingProvider: purchasedLabel.shippingProvider,
-    shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-    shippingProviderRateId: purchasedLabel.shippingProviderRateId,
-    shippingProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-    sellerNotes
-  });
-
-  const buyer = await findUserById(order.buyerId);
-  if (buyer) {
-    await sendOrderShippedNotifications({
-      order: {
-        ...order,
-        status: "shipped",
-        carrier: purchasedLabel.carrier,
-        trackingNumber: purchasedLabel.trackingNumber,
-        trackingUrl: purchasedLabel.trackingUrl,
-        trackingStatus: purchasedLabel.trackingStatus,
-        shippingEta: purchasedLabel.shippingEta,
-        shippingLabelUrl: purchasedLabel.shippingLabelUrl,
-        shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-        shippingProvider: purchasedLabel.shippingProvider,
-        shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-        shippingProviderRateId: purchasedLabel.shippingProviderRateId,
-        shippingProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-        sellerNotes,
-        shippedAt: new Date().toISOString()
-      },
-      listing,
-      buyer,
-      seller: user
-    });
-  }
-
-  revalidatePath("/seller");
-  revalidatePath("/buyer");
-  redirect("/seller?saved=shippo-label");
+  return purchaseOutboundAction(formData, true);
 }
 
 export async function buySelectedShippoRateAction(formData: FormData) {
-  redirectIfDatabaseUnavailable("/seller?authError=Add+DATABASE_URL+to+manage+orders");
+  return purchaseOutboundAction(formData, false);
+}
+
+async function purchaseOutboundAction(formData: FormData, automatic: boolean) {
   const user = await getCurrentUser();
-  if (!user || (user.role !== "seller" && user.role !== "both")) {
-    redirect("/?authError=Seller+account+required");
-  }
-
+  if (!user || !["seller", "both"].includes(user.role)) redirect("/?authError=Seller+account+required");
   const orderId = stringValue(formData, "orderId");
-  const shipmentId = stringValue(formData, "shipmentId");
-  const rateId = stringValue(formData, "rateId");
-  const sellerNotes = stringValue(formData, "sellerNotes") || null;
-  const provider = stringValue(formData, "provider");
-  const currency = stringValue(formData, "currency");
-  const serviceLevel = stringValue(formData, "serviceLevel");
-  const rateAmountRaw = stringValue(formData, "rateAmount");
-
   const order = await findOrderById(orderId);
-  if (!order || order.sellerId !== user.id) {
-    redirect("/seller?authError=Order+not+found");
-  }
-  if (!["paid", "processing"].includes(order.status)) {
-    redirect("/seller?authError=Payment+must+be+confirmed+before+shipping");
-  }
-
-  const listing = await findListingById(order.listingId);
-  if (!listing) {
-    redirect("/seller?authError=Listing+not+found+for+this+order");
-  }
-
-  let purchasedLabel;
-
+  if (!order || order.sellerId !== user.id) redirect("/seller?authError=Order+not+found");
+  let shipmentId = stringValue(formData, "shipmentId"), rateId = stringValue(formData, "rateId");
   try {
-    purchasedLabel = await purchaseShippoLabelForRate({
-      orderId,
-      shipmentId,
-      rateId,
-      rate: {
-        rateId,
-        provider: provider || "Shippo",
-        serviceLevel: serviceLevel || "Standard",
-        amount: rateAmountRaw ? Number(rateAmountRaw) : null,
-        currency: currency || null,
-        estimatedDays: null,
-        durationTerms: null
-      }
-    });
+    if (automatic) {
+      const listing = await findListingById(order.listingId);
+      if (!listing) throw new Error("Listing not found");
+      const quote = await createShippoShipmentQuote({ order, listing, seller: user });
+      await saveOutboundQuote(orderId, quote);
+      shipmentId = quote.shipmentId;
+      rateId = quote.rates[0]?.rateId || "";
+    }
+    await buyOutboundLabel(orderId, user.id, shipmentId, rateId, stringValue(formData, "sellerNotes") || null);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Shippo could not create a label for this order.";
-    redirect(`/seller?authError=${encodeURIComponent(message)}`);
+    redirect('/seller?authError=' + encodeURIComponent(error instanceof Error ? error.message : "Label purchase needs support review"));
   }
-
-  await updateOrderShippingWithProvider(orderId, {
-    carrier: purchasedLabel.carrier,
-    trackingNumber: purchasedLabel.trackingNumber,
-    trackingUrl: purchasedLabel.trackingUrl,
-    trackingStatus: purchasedLabel.trackingStatus,
-    shippingEta: purchasedLabel.shippingEta,
-    shippingLabelUrl: purchasedLabel.shippingLabelUrl,
-    shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-    shippingProvider: purchasedLabel.shippingProvider,
-    shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-    shippingProviderRateId: purchasedLabel.shippingProviderRateId,
-    shippingProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-    sellerNotes
-  });
-
-  const buyer = await findUserById(order.buyerId);
-  if (buyer) {
-    await sendOrderShippedNotifications({
-      order: {
-        ...order,
-        status: "shipped",
-        carrier: purchasedLabel.carrier,
-        trackingNumber: purchasedLabel.trackingNumber,
-        trackingUrl: purchasedLabel.trackingUrl,
-        trackingStatus: purchasedLabel.trackingStatus,
-        shippingEta: purchasedLabel.shippingEta,
-        shippingLabelUrl: purchasedLabel.shippingLabelUrl,
-        shippingQrCodeUrl: purchasedLabel.shippingQrCodeUrl,
-        shippingProvider: purchasedLabel.shippingProvider,
-        shippingProviderShipmentId: purchasedLabel.shippingProviderShipmentId,
-        shippingProviderRateId: purchasedLabel.shippingProviderRateId,
-        shippingProviderTransactionId: purchasedLabel.shippingProviderTransactionId,
-        sellerNotes,
-        shippedAt: new Date().toISOString()
-      },
-      listing,
-      buyer,
-      seller: user
-    });
-  }
-
   revalidatePath("/seller");
-  revalidatePath("/buyer");
-  redirect("/seller?saved=shippo-rate");
+  revalidatePath("/buyer/orders");
+  redirect("/seller?saved=shippo-label");
 }
 
 export async function confirmReturnAction(formData: FormData) {

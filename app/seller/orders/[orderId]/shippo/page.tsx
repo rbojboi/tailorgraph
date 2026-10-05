@@ -1,3 +1,4 @@
+import { saveOutboundQuote } from "@/lib/outbound-labels";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buySelectedShippoRateAction } from "@/app/actions";
@@ -56,6 +57,7 @@ export default async function SellerShippoRatesPage({
       listing,
       seller: user
     });
+    await saveOutboundQuote(orderId, quote);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Shippo could not return rates for this order.";
     redirect(`/seller?authError=${encodeURIComponent(message)}`);

@@ -30,6 +30,9 @@ function resolveExistingFile(candidate) {
 }
 
 export async function resolve(specifier, context, nextResolve) {
+  if (["next/cache", "next/navigation", "next/headers", "next/server"].includes(specifier)) {
+    return nextResolve(specifier + ".js", context);
+  }
   if (specifier.startsWith("@/")) {
     const resolved = resolveExistingFile(path.join(projectRoot, specifier.slice(2)));
     if (resolved) {

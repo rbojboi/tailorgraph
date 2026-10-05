@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   findOrderByReturnProviderTransactionId,
   findOrderByShippingProviderTransactionId,
+  findOrderById,
   updateOrderReturnTrackingFromProvider,
   updateOrderTrackingFromProvider
 } from "@/lib/store";
@@ -85,26 +86,29 @@ export async function POST(request: NextRequest) {
 
   // track_updated carries a tracking object, whose object_id is not a label transaction ID.
   const trackingNumber = readString(transaction, "tracking_number");
-  if (trackingNumber) {
-    const matches = await requirePool().query("SELECT id FROM orders WHERE return_tracking_number=$1", [trackingNumber]);
-    for (const match of matches.rows) await processReturn(match.id);
-    if (matches.rowCount) {
-      await deliverReturnNotifications();
-      revalidatePath("/buyer/orders");
-      revalidatePath("/seller");
-      return NextResponse.json({ received: true, kind: "return" });
+  let outboundOrder = transactionId ? await findOrderByShippingProviderTransactionId(transactionId) : null;
+  let returnOrder = transactionId ? await findOrderByReturnProviderTransactionId(transactionId) : null;
+  if (outboundOrder && returnOrder) return NextResponse.json({ received: false }, { status: 400 });
+  const carrier = readString(transaction, "carrier") || readProvider(transaction);
+  if (!outboundOrder && !returnOrder && trackingNumber && carrier) {
+    const matches = await requirePool().query(`SELECT id,'outbound' AS direction FROM orders WHERE tracking_number=$1
+      AND LOWER(REPLACE(carrier,' ','_'))=LOWER(REPLACE($2,' ','_'))
+      UNION ALL SELECT id,'return' AS direction FROM orders WHERE return_tracking_number=$1
+      AND LOWER(REPLACE(return_carrier,' ','_'))=LOWER(REPLACE($2,' ','_'))`, [trackingNumber,carrier]);
+    if (matches.rows.length === 1) {
+      const match=matches.rows[0],order=await findOrderById(match.id);
+      if(match.direction==='outbound') outboundOrder=order; else returnOrder=order;
     }
   }
-  if (!transactionId) return NextResponse.json({ received: true });
-
-  const outboundOrder = await findOrderByShippingProviderTransactionId(transactionId);
   if (outboundOrder) {
+    if (trackingNumber && outboundOrder.trackingNumber !== trackingNumber) return NextResponse.json({ received: false }, { status: 400 });
     await updateOrderTrackingFromProvider(outboundOrder.id, {
       carrier: readProvider(transaction) || outboundOrder.carrier,
       trackingNumber: readString(transaction, "tracking_number") || outboundOrder.trackingNumber,
       trackingUrl: readString(transaction, "tracking_url_provider") || outboundOrder.trackingUrl,
       trackingStatus: readTrackingStatus(transaction) || outboundOrder.trackingStatus,
-      shippingEta: readString(transaction, "eta") || outboundOrder.shippingEta
+      shippingEta: readString(transaction, "eta") || outboundOrder.shippingEta,
+      deliveredAt: readNestedString(transaction, "tracking_status", "status_date")
     });
 
     revalidatePath("/seller");
@@ -115,10 +119,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, kind: "outbound" });
   }
 
-  const returnOrder = await findOrderByReturnProviderTransactionId(transactionId);
   if (!returnOrder) {
     return NextResponse.json({ received: true });
   }
+  if (trackingNumber && returnOrder.returnTrackingNumber !== trackingNumber) return NextResponse.json({ received: false }, { status: 400 });
 
   await updateOrderReturnTrackingFromProvider(returnOrder.id, {
     carrier: readProvider(transaction) || returnOrder.returnCarrier,

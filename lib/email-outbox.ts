@@ -28,6 +28,10 @@ type Job = {
 };
 
 export async function shouldSkipEmail(input: EmailInput) {
+  if(input.requirePaidOrder && input.orderId) {
+    const order=await requirePool().query("SELECT status FROM orders WHERE id=$1",[input.orderId]);
+    if(!order.rows[0] || !['paid','processing','shipped','delivered'].includes(order.rows[0].status)) return true;
+  }
   if(input.offerId && input.offerPaymentState) {
     const offer=await requirePool().query("SELECT payment_state FROM offers WHERE id=$1",[input.offerId]);
     if(offer.rows[0]?.payment_state!==input.offerPaymentState) return true;

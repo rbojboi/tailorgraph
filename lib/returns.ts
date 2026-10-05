@@ -185,7 +185,10 @@ async function refundLocked(orderId: string) {
     if (refund.amount !== ret.refund_cents || refund.payment_intent !== intent.id) throw new Error("Refund does not match this return");
     await db().query("UPDATE order_returns SET stripe_refund_id=$2,refund_status=$3,error=NULL,updated_at=NOW() WHERE order_id=$1", [orderId, refund.id, refund.status || "pending"]);
     if (refund.status !== "succeeded") {
-      if (["failed", "canceled", "requires_action"].includes(refund.status || "")) await enqueue(orderId, "needs_attention");
+      if (["failed", "canceled", "requires_action"].includes(refund.status || "")) {
+        await db().query("UPDATE orders SET status='issue_open',issue_reason='Refund needs support review' WHERE id=$1", [orderId]);
+        await enqueue(orderId, "needs_attention");
+      }
       return;
     }
     await db().query("UPDATE orders SET status='refunded' WHERE id=$1", [orderId]);
@@ -211,7 +214,7 @@ async function refundLocked(orderId: string) {
     throw e;
   }
 }
-export async function processReturn(orderId: string) {
+export async function processReturn(orderId: string, options: { refreshRefund?: boolean } = {}) {
   return locked(`return:${orderId}`, async () => {
     let ret = await getReturn(orderId);
     const order = await findOrderById(orderId);
@@ -235,16 +238,12 @@ export async function processReturn(orderId: string) {
       await db().query("UPDATE order_returns SET error='No carrier acceptance within the shipping window. Support must review the tracking history.' WHERE order_id=$1", [orderId]);
       await enqueue(orderId, "needs_attention");
     }
-    if (ret.accepted_at && (ret.refund_status !== "succeeded" || ret.recovery_status !== "succeeded")) await refundLocked(orderId);
+    if (ret.accepted_at && (options.refreshRefund || ret.refund_status !== "succeeded" || ret.recovery_status !== "succeeded")) await refundLocked(orderId);
     await db().query(`WITH closed AS (UPDATE order_returns SET closed_at=NOW()
       WHERE order_id=$1 AND closed_at IS NULL AND disputed_at IS NULL AND refund_status='succeeded'
       AND received_at <= NOW()-INTERVAL '48 hours' RETURNING order_id)
       UPDATE orders SET return_status='closed' WHERE id IN (SELECT order_id FROM closed)`, [orderId]);
-    const closed = await getReturn(orderId);
-    if (closed?.closed_at && !closed.disputed_at) {
-      // Return to a draft for the seller to confirm condition and availability.
-      await db().query("UPDATE listings SET status='draft' WHERE id=$1 AND status='sold'", [order.listingId]);
-    }
+    // Inventory changes atomically with the first closed_at transition.
   });
 }
 export async function disputeReturnedItem(orderId: string, sellerId: string, details: string, evidence: string) {
@@ -264,9 +263,9 @@ export async function acceptReturnedItem(orderId: string, sellerId: string) {
     const order = await findOrderById(orderId);
     const ret = await getReturn(orderId);
     if (!order || order.sellerId !== sellerId || !ret?.received_at || ret.disputed_at || ret.refund_status !== "succeeded") throw new Error("This return is not ready to close.");
+    if (ret.closed_at) return;
     await db().query("UPDATE order_returns SET closed_at=COALESCE(closed_at,NOW()) WHERE order_id=$1", [orderId]);
     await db().query("UPDATE orders SET return_status='closed' WHERE id=$1", [orderId]);
-    await db().query("UPDATE listings SET status='draft' WHERE id=$1 AND status='sold'", [order.listingId]);
   });
 }
 
@@ -278,7 +277,6 @@ export async function reviewReturnDispute(orderId: string, outcome: string, note
     if (!ret?.disputed_at || ret.dispute_resolution || !order) throw new Error("No unresolved return dispute found");
     await db().query("UPDATE order_returns SET dispute_resolution=$2,closed_at=NOW() WHERE order_id=$1", [orderId, `${outcome} by ${adminId}: ${notes.trim()}`]);
     await db().query("UPDATE orders SET return_status='closed' WHERE id=$1", [orderId]);
-    await db().query("UPDATE listings SET status=$2 WHERE id=$1 AND status='sold'", [order.listingId, outcome === "upheld" ? "archived" : "draft"]);
     await enqueue(orderId, "reviewed");
   });
 }

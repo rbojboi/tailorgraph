@@ -14,11 +14,12 @@ mock.module(new URL("../lib/email-monitor.ts",import.meta.url).href,{namedExport
 mock.module(new URL("../lib/email-digests.ts",import.meta.url).href,{namedExports:{flushEmailDigests:async()=>calls.push("digests")}});
 mock.module(new URL("../lib/notification-events.ts",import.meta.url).href,{namedExports:{processNotificationEvents:async()=>{calls.push("events");if(fail)throw Error("storage failed");},queueShippingReminders:async()=>calls.push("shipping")}});
 mock.module(new URL("../lib/offers.ts",import.meta.url).href,{namedExports:{expireOffers:async()=>calls.push("offers")}});
+mock.module(new URL("../lib/return-notifications.ts",import.meta.url).href,{namedExports:{deliverReturnNotifications:async()=>calls.push("returns")}});
 const {deliverPendingEmails}=await import("../lib/notifications.ts");
 beforeEach(()=>{queries.length=0;calls.length=0;locked=true;fail=false;released=false;process.env.RESEND_API_KEY="fake";process.env.EMAIL_FROM="sender@example.com";});
 test("worker holds a transaction lock across the pipeline and records completion only after sending",async()=>{
  assert.equal((await deliverPendingEmails()).sent,1);
- assert.deepEqual(calls,["offers","events","shipping","digests","drain","status"]);
+ assert.deepEqual(calls,["offers","events","returns","shipping","digests","drain","status"]);
  assert.equal(queries[0],"BEGIN");assert.match(queries[1],/pg_try_advisory_xact_lock/);
  assert.ok(queries.some(sql=>sql.includes("email_worker_health")));assert.ok(queries.includes("COMMIT"));assert.ok(released);
 });

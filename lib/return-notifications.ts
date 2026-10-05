@@ -17,14 +17,15 @@ export async function deliverReturnNotifications() {
         received: "The return has been delivered. The seller has 48 hours after carrier delivery to inspect it and report a problem.",
         disputed: "The seller reported a problem with the returned item. TailorGraph will review the evidence. The buyer's completed refund is unchanged.",
         reviewed: "TailorGraph has reviewed the seller's return dispute. Contact support for the decision and any agreed settlement. The buyer is not automatically charged again.",
-        needs_attention: "A return payment or label needs attention. Review the return operations page and provider records before retrying."
+        needs_attention: "A return payment or label needs attention. Review the return operations page and provider records before retrying.",
+        refund_failed: "The payment provider reported a problem with the refund. TailorGraph needs to review the payment. The buyer will not be charged again automatically; contact support for an update."
       };
       const text = copy[row.kind] || "Your return has been updated.";
       const recipients = row.kind === "needs_attention"
         ? getAdminEmails().map(email => ({ email, path: "/admin/returns" }))
         : [buyer ? { email: buyer.email, path: `/buyer/orders/${order.id}/return` } : null,
            seller ? { email: seller.email, path: `/seller/orders/${order.id}/return` } : null,
-           ...(row.kind === "disputed" ? getAdminEmails().map(email => ({ email, path: "/admin/returns" })) : [])].filter((value): value is { email: string; path: string } => value !== null);
+           ...(["disputed", "refund_failed"].includes(row.kind) ? getAdminEmails().map(email => ({ email, path: "/admin/returns" })) : [])].filter((value): value is { email: string; path: string } => value !== null);
       if (!recipients.length) throw new Error("No return notification recipients configured");
       for (const recipient of recipients) {
         const button = row.kind === "approved" && recipient.path.startsWith("/buyer/")
